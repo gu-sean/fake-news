@@ -1,3 +1,4 @@
+# 하이브리드 분류 모델 정의
 import torch
 import torch.nn as nn
 from transformers import RobertaModel

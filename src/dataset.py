@@ -1,3 +1,4 @@
+# PyTorch Dataset 정의
 import numpy as np
 import pandas as pd
 import torch
@@ -17,7 +18,7 @@ PAD_ID = 1
 
 class FakeNewsDataset(Dataset):
     """
-    36만 건의 대규모 데이터를 다루기 위해 'Lazy Tokenization' 방식을 사용.
+    34만 건의 대규모 데이터를 다루기 위해 'Lazy Tokenization' 방식을 사용.
     모든 데이터를 미리 토큰화하여 메모리에 올리지 않고, 학습 시 필요한 시점에만 변환하여 RAM 부족을 방지.
     """
 

@@ -1,7 +1,4 @@
-"""
-학습 실행:python -m src.train --batch_size 16 --epochs 5
-"""
-
+# 모델 학습 스크립트
 import argparse
 import logging
 from pathlib import Path
