@@ -62,6 +62,7 @@
 
 ## 4. 프로젝트 디렉토리 구조 (Directory Structure)
 
+```text
 fake_news/
  ├── main.py                        # 학습 실행 진입점 (CLI 래퍼)
  ├── requirements.txt               # 패키지 의존성 목록
