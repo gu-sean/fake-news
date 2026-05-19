@@ -18,6 +18,8 @@ def main():
     parser.add_argument("--batch_size",     type=int,   default=16)
     parser.add_argument("--freeze_layers",  type=int,   default=0,
                         help="하위 N개 인코더 레이어 고정 (메모리 절약용)")
+    parser.add_argument("--result_path",   default="data/processed/training_results.txt",
+                        help="학습 결과를 저장할 txt 파일 경로")
     args = parser.parse_args()
 
     data_path = root_dir / args.data_path
@@ -34,12 +36,13 @@ def main():
     print("=== 학습 시작 ===")
     try:
         subprocess.run(
-            [sys.executable, str(train_script),
+            [sys.executable, "-m", "src.train",
              "--data_path",      args.data_path,
              "--checkpoint_dir", args.checkpoint_dir,
              "--epochs",         str(args.epochs),
              "--batch_size",     str(args.batch_size),
-             "--freeze_layers",  str(args.freeze_layers)],
+             "--freeze_layers",  str(args.freeze_layers),
+             "--result_path",    args.result_path],
             check=True,
             cwd=str(root_dir),
         )

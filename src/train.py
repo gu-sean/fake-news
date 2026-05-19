@@ -1,6 +1,8 @@
 # 모델 학습 스크립트
 import argparse
 import logging
+import time
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -23,6 +25,49 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
+
+
+def save_results(
+    result_path: str,
+    args: argparse.Namespace,
+    epoch_results: list[dict],
+    best_epoch: int,
+    best_f1: float,
+    elapsed_sec: float,
+) -> None:
+    """에포크별 성능 수치를 정리하여 txt 파일로 저장."""
+    Path(result_path).parent.mkdir(parents=True, exist_ok=True)
+
+    lines = [
+        "=" * 55,
+        "           모델 학습 성능 결과",
+        "=" * 55,
+        f"실행 일시   : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        f"데이터 파일 : {args.data_path}",
+        f"총 에포크   : {args.epochs}",
+        f"배치 크기   : {args.batch_size}",
+        f"최대 길이   : {args.max_length}",
+        f"총 소요 시간: {elapsed_sec/60:.1f}분 ({elapsed_sec:.0f}초)",
+        "-" * 55,
+        f"{'Epoch':>5}  {'Train Loss':>10}  {'Train Acc':>9}  {'Val Loss':>8}  {'Val Acc':>7}  {'Macro-F1':>8}",
+        "-" * 55,
+    ]
+
+    for r in epoch_results:
+        marker = " *" if r["epoch"] == best_epoch else ""
+        lines.append(
+            f"{r['epoch']:>5}  {r['train_loss']:>10.4f}  {r['train_acc']:>9.4f}"
+            f"  {r['val_loss']:>8.4f}  {r['val_acc']:>7.4f}  {r['val_f1']:>8.4f}{marker}"
+        )
+
+    lines += [
+        "-" * 55,
+        f"최고 성능   : Epoch {best_epoch}  Macro-F1 = {best_f1:.4f}  (* 표시)",
+        "=" * 55,
+    ]
+
+    Path(result_path).write_text("\n".join(lines), encoding="utf-8")
+    logger.info(f"결과 저장 완료: {result_path}")
 
 
 # ── Optimizer 빌드: 부위별 차등 학습률 적용 ────────────────────────
@@ -187,6 +232,10 @@ def main(args: argparse.Namespace) -> None:
     ckpt_dir = Path(args.checkpoint_dir)
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     best_f1 = 0.0
+    best_epoch = 1
+    epoch_results: list[dict] = []
+
+    start_time = time.time()
 
     # 실제 학습 루프 실행
     for epoch in range(1, args.epochs + 1):
@@ -200,9 +249,16 @@ def main(args: argparse.Namespace) -> None:
             f"val    loss={val_loss:.4f}  acc={val_acc:.4f}  macro-f1={val_f1:.4f}"
         )
 
+        epoch_results.append({
+            "epoch": epoch,
+            "train_loss": train_loss, "train_acc": train_acc,
+            "val_loss": val_loss,     "val_acc": val_acc, "val_f1": val_f1,
+        })
+
         # F1 스코어가 가장 높은 시점의 모델 가중치 저장
         if val_f1 > best_f1:
             best_f1 = val_f1
+            best_epoch = epoch
             ckpt_path = ckpt_dir / "best_model.pt"
             torch.save({
                 "epoch": epoch,
@@ -213,7 +269,10 @@ def main(args: argparse.Namespace) -> None:
             }, ckpt_path)
             logger.info(f"  Best Model Updated (val_f1={val_f1:.4f}) -> {ckpt_path}")
 
-    logger.info(f"Training complete. Best val macro-F1: {best_f1:.4f}")
+    elapsed = time.time() - start_time
+    logger.info(f"학습 완료. Best val macro-F1: {best_f1:.4f}  소요 시간: {elapsed/60:.1f}분")
+
+    save_results(args.result_path, args, epoch_results, best_epoch, best_f1, elapsed)
 
 
 # ── 실행 파라미터 정의 ──────────────────────────────────────────────────────────
@@ -223,6 +282,8 @@ if __name__ == "__main__":
     # 기본 경로 설정
     parser.add_argument("--data_path",       default="data/processed/unified_news_refined.csv")
     parser.add_argument("--checkpoint_dir",  default="checkpoints")
+    parser.add_argument("--result_path",     default="data/processed/training_results.txt",
+                        help="학습 결과를 저장할 txt 파일 경로")
 
     # 모델 하이퍼파라미터
     parser.add_argument("--max_length",      type=int,   default=512)
