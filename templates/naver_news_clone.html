@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>네이버 뉴스</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Malgun Gothic", sans-serif;
+            background: #f0f2f5;
+            color: #1a1a1a;
+            font-size: 14px;
+        }
+
+        /* ── GNB ── */
+        .as_gnb_mnews {
+            background: #fff;
+            border-bottom: 1px solid #e0e0e0;
+            position: sticky;
+            top: 0;
+            z-index: 200;
+        }
+        .header_inner { width: 100%; }
+        .Ngnb { padding: 0 16px; }
+        .Ngnb_inner { display: flex; flex-direction: column; }
+        .Ngnb_both {
+            display: flex;
+            align-items: center;
+            height: 52px;
+        }
+        .Ngnb_left { display: flex; align-items: center; gap: 12px; flex: 1; }
+        .Ngnb_right { display: flex; align-items: center; gap: 8px; }
+
+        .Ngnb_logo { display: flex; align-items: center; }
+        .Nlogo_link { text-decoration: none; }
+        .Nicon_logo {
+            font-size: 24px;
+            font-weight: 900;
+            color: #03C75A;
+            letter-spacing: -1px;
+        }
+
+        .Ngnb_service { display: flex; align-items: center; }
+        .Nservice_item { list-style: none; }
+        .Nservice_item a, .Nservice_subitem a {
+            text-decoration: none;
+            color: #1a1a1a;
+            display: flex;
+            align-items: center;
+        }
+        .Nicon_service {
+            font-size: 17px;
+            font-weight: bold;
+            color: #1a1a1a;
+            padding: 0 10px 0 4px;
+            border-right: 1px solid #e0e0e0;
+            margin-right: 10px;
+        }
+        .Nservice_subitem { display: inline-flex; align-items: center; }
+        .Nicon_family {
+            font-size: 13px;
+            color: #555;
+            padding: 4px 8px;
+            white-space: nowrap;
+        }
+        .Nicon_family:hover { color: #03C75A; }
+
+        .Ngnb_my_setting_link {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 1px solid #e0e0e0;
+            text-decoration: none;
+            font-size: 12px;
+            font-weight: bold;
+            color: #555;
+        }
+        .Ngnb_my_setting_link:hover { border-color: #03C75A; color: #03C75A; }
+        .Ntool_button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            cursor: pointer;
+            background: none;
+            border: none;
+        }
+        .Nicon_search { font-size: 18px; color: #555; }
+        .Nicon_search:hover { color: #03C75A; }
+
+        /* ── LNB ── */
+        .Nlnb {
+            border-top: 1px solid #f0f0f0;
+            background: #fff;
+        }
+        .Nlnb_menu { overflow-x: auto; }
+        .Nlnb_menu::-webkit-scrollbar { display: none; }
+        .Nlnb_menu_inner { display: flex; align-items: center; }
+        .Nlnb_menu_list {
+            display: flex;
+            list-style: none;
+            padding: 0 16px;
+        }
+        .Nlist_item { flex-shrink: 0; }
+        .Nitem_link {
+            display: block;
+            padding: 10px 12px;
+            font-size: 14px;
+            color: #555;
+            text-decoration: none;
+            border-bottom: 2px solid transparent;
+            white-space: nowrap;
+        }
+        .Nitem_link:hover { color: #03C75A; }
+        .Nlist_item.is_active .Nitem_link {
+            color: #03C75A;
+            font-weight: bold;
+            border-bottom: 2px solid #03C75A;
+        }
+        .Nlnb_menu_my_area { margin-left: auto; padding-right: 16px; }
+        .Nlnb_menu_my_link {
+            font-size: 12px;
+            font-weight: bold;
+            color: #555;
+            text-decoration: none;
+            padding: 6px 10px;
+            border: 1px solid #ddd;
+            border-radius: 12px;
+        }
+
+        /* ── main_container ── */
+        .main_container {
+            max-width: 1060px;
+            margin: 0 auto;
+            padding: 16px 16px 30px;
+        }
+
+        /* ── AI 배너 ── */
+        .ai-banner {
+            background: linear-gradient(135deg, #e8fff3, #f0f8ff);
+            border: 1px solid #b2e5cc;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .ai-banner-icon { font-size: 20px; }
+        .ai-banner-text { font-size: 13px; color: #1a6e3c; line-height: 1.5; }
+        .ai-banner-text strong { display: inline; font-size: 14px; margin-right: 6px; }
+        .ai-banner-right { margin-left: auto; }
+        .refresh-btn {
+            font-size: 12px;
+            color: #03C75A;
+            text-decoration: none;
+            border: 1px solid #03C75A;
+            padding: 4px 12px;
+            border-radius: 12px;
+            white-space: nowrap;
+        }
+        .refresh-btn:hover { background: #f0fff7; }
+
+        /* ── main_sublnb ── */
+        .main_sublnb {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 0 14px;
+            border-bottom: 1px solid #e0e0e0;
+            margin-bottom: 16px;
+        }
+        .main_sublnb_date {
+            font-size: 13px;
+            color: #333;
+            font-weight: bold;
+        }
+        .main_sublnb_menu { display: flex; gap: 14px; }
+        .main_sublnb_menu a {
+            font-size: 13px;
+            color: #999;
+            text-decoration: none;
+        }
+        .main_sublnb_menu a.is_selected {
+            color: #03C75A;
+            font-weight: bold;
+        }
+        .main_sublnb_menu a:hover { color: #03C75A; }
+
+        /* ── main_brick 그리드 ── */
+        .main_brick {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 14px;
+        }
+        @media (max-width: 900px) { .main_brick { grid-template-columns: repeat(3, 1fr); } }
+        @media (max-width: 640px) { .main_brick { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 400px) { .main_brick { grid-template-columns: 1fr; } }
+
+        /* ── comp_news_feed 카드 ── */
+        .comp_news_feed {
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            transition: box-shadow 0.2s;
+        }
+        .comp_news_feed:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+        .comp_news_feed.cnf_fake_blind {
+            border-color: #ff4d4f;
+            border-left: 3px solid #ff4d4f;
+        }
+
+        /* 언론사 헤더 */
+        .cnf_journal_area {
+            display: flex;
+            align-items: center;
+            padding: 10px 12px;
+            gap: 7px;
+            border-bottom: 1px solid #f3f3f3;
+        }
+        .cnf_journal_thumb {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: #03C75A;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            overflow: hidden;
+        }
+        .cnf_journal_logo_text {
+            font-size: 10px;
+            font-weight: bold;
+            color: #fff;
+        }
+        .cnf_journal_name {
+            font-size: 12px;
+            font-weight: bold;
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: #222;
+        }
+        .cnf_journal_sub {
+            font-size: 11px;
+            color: #bbb;
+            white-space: nowrap;
+        }
+        .cnf_btn_subscription {
+            font-size: 11px;
+            color: #03C75A;
+            border: 1px solid #03C75A;
+            background: none;
+            border-radius: 10px;
+            padding: 2px 7px;
+            cursor: pointer;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .cnf_btn_subscription:hover { background: #f0fff7; }
+
+        /* AI 점수 바 */
+        .cnf_ai_score_area {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: #fafafa;
+            border-bottom: 1px solid #f3f3f3;
+        }
+        .cnf_ai_label {
+            font-size: 10px;
+            color: #bbb;
+            white-space: nowrap;
+        }
+        .cnf_score_bar_wrap {
+            flex: 1;
+            height: 3px;
+            background: #eee;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .cnf_score_bar { height: 100%; border-radius: 2px; }
+        .cnf_score_val {
+            font-size: 11px;
+            color: #bbb;
+            white-space: nowrap;
+            min-width: 38px;
+            text-align: right;
+        }
+        .cnf_score_val.danger { color: #ff4d4f; font-weight: bold; }
+
+        /* 기사 본문 영역 */
+        .cnf_news_area {
+            padding: 12px;
+            position: relative;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .cnf_news_thumb_wrap {
+            width: 100%;
+            height: 116px;
+            background: #efefef;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+        .cnf_news_thumb_placeholder { font-size: 32px; }
+        .cnf_news_title {
+            font-size: 13px;
+            font-weight: bold;
+            line-height: 1.5;
+            color: #1a1a1a;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .cnf_news_title a { color: inherit; text-decoration: none; }
+        .cnf_news_title a:hover { text-decoration: underline; }
+
+        /* 가짜뉴스 블라인드 */
+        .comp_news_feed.cnf_fake_blind .cnf_news_title,
+        .comp_news_feed.cnf_fake_blind .cnf_news_list {
+            filter: blur(4px);
+            opacity: 0.2;
+            pointer-events: none;
+            user-select: none;
+        }
+        .cnf_fake_overlay {
+            position: absolute;
+            top: 50%;
+            left: 12px;
+            right: 12px;
+            transform: translateY(-50%);
+            z-index: 10;
+            text-align: center;
+        }
+        .fake-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: #fff0f0;
+            border: 1px solid #ffb3b3;
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 11px;
+            color: #c0392b;
+            font-weight: bold;
+        }
+        .fake-badge-sub {
+            font-size: 10px;
+            color: #aaa;
+            margin-top: 4px;
+        }
+
+        /* 서브 기사 목록 */
+        .cnf_news_list {
+            list-style: none;
+            border-top: 1px solid #f3f3f3;
+            padding: 6px 12px 8px;
+        }
+        .cnf_news_item {
+            padding: 5px 0;
+            border-bottom: 1px solid #f8f8f8;
+        }
+        .cnf_news_item:last-child { border-bottom: none; }
+        .cnf_news {
+            display: block;
+            font-size: 12px;
+            color: #555;
+            text-decoration: none;
+            line-height: 1.4;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .cnf_news:hover { color: #03C75A; }
+
+        /* ── 푸터 ── */
+        .footer {
+            text-align: center;
+            padding: 28px;
+            font-size: 12px;
+            color: #aaa;
+            border-top: 1px solid #e0e0e0;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<!-- ── GNB ── -->
+<header role="banner" class="as_gnb_mnews as_type_section">
+    <div class="header_inner">
+        <div class="Ngnb">
+            <div class="Ngnb_inner">
+                <div class="Ngnb_both">
+
+                    <!-- 좌측: 로고 + 서비스 탭 -->
+                    <div class="Ngnb_left">
+                        <span class="Ngnb_logo">
+                            <a href="/" class="Nlogo_link" data-clk="gnb.naver">
+                                <span class="Nicon_logo">NAVER</span>
+                            </a>
+                        </span>
+                        <div class="Ngnb_service">
+                            <h1 class="Nservice_item">
+                                <a href="/" data-clk="gnb.news">
+                                    <span class="Nicon_service">뉴스</span>
+                                </a>
+                            </h1>
+                            <span class="Nservice_subitem"><a href="https://entertain.naver.com/home" target="_blank"><span class="Nicon_family">엔터</span></a></span>
+                            <span class="Nservice_subitem"><a href="https://sports.news.naver.com/index" target="_blank"><span class="Nicon_family">스포츠</span></a></span>
+                            <span class="Nservice_subitem"><a href="https://weather.naver.com" target="_blank"><span class="Nicon_family">날씨</span></a></span>
+                            <span class="Nservice_subitem"><a href="https://contents.premium.naver.com" target="_blank"><span class="Nicon_family">프리미엄</span></a></span>
+                            <span class="Nservice_subitem"><a href="https://news.naver.com/election/region2026" target="_blank"><span class="Nicon_family">지방선거</span></a></span>
+                        </div>
+                    </div>
+
+                    <!-- 우측: MY + 검색 -->
+                    <div class="Ngnb_right">
+                        <div class="Ngnb_my_setting">
+                            <a href="#" class="Ngnb_my_setting_link" data-clk="gnb.mypage">MY</a>
+                        </div>
+                        <div class="Ngnb_tool">
+                            <a href="javascript:;" class="Ntool_button" data-clk="gnb.scho">
+                                <span class="Nicon_search">&#128269;</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── LNB 탭 메뉴 ── -->
+        <div id="_LNB_PARENT_WRAP" class="Nlnb">
+            <div id="_LNB_WRAP" class="Nlnb_menu">
+                <div id="_LNB" class="Nlnb_menu_inner">
+                    <ul class="Nlnb_menu_list" role="tablist">
+                        <!-- 언론사별 탭이 첫 번째이자 기본 활성 탭 -->
+                        <li class="Nlist_item is_active" role="presentation">
+                            <a href="/" class="Nitem_link" role="tab" data-clk="lnb.press">
+                                <span class="Nitem_link_menu">언론사별</span>
+                            </a>
+                        </li>
+                        <li class="Nlist_item" role="presentation">
+                            <a href="#" class="Nitem_link wip-tab" role="tab" data-clk="lnb.pol">
+                                <span class="Nitem_link_menu">정치</span>
+                            </a>
+                        </li>
+                        <li class="Nlist_item" role="presentation">
+                            <a href="#" class="Nitem_link wip-tab" role="tab" data-clk="lnb.eco">
+                                <span class="Nitem_link_menu">경제</span>
+                            </a>
+                        </li>
+                        <li class="Nlist_item" role="presentation">
+                            <a href="#" class="Nitem_link wip-tab" role="tab" data-clk="lnb.soc">
+                                <span class="Nitem_link_menu">사회</span>
+                            </a>
+                        </li>
+                        <li class="Nlist_item" role="presentation">
+                            <a href="#" class="Nitem_link wip-tab" role="tab" data-clk="lnb.lif">
+                                <span class="Nitem_link_menu">생활/문화</span>
+                            </a>
+                        </li>
+                        <li class="Nlist_item" role="presentation">
+                            <a href="#" class="Nitem_link wip-tab" role="tab" data-clk="lnb.it">
+                                <span class="Nitem_link_menu">IT/과학</span>
+                            </a>
+                        </li>
+                        <li class="Nlist_item" role="presentation">
+                            <a href="#" class="Nitem_link wip-tab" role="tab" data-clk="lnb.wor">
+                                <span class="Nitem_link_menu">세계</span>
+                            </a>
+                        </li>
+                        <li class="Nlist_item" role="presentation">
+                            <a href="#" class="Nitem_link wip-tab" role="tab" data-clk="lnb.rank">
+                                <span class="Nitem_link_menu">랭킹</span>
+                            </a>
+                        </li>
+                        <li class="Nlist_item" role="presentation">
+                            <a href="#" class="Nitem_link wip-tab" role="tab" data-clk="lnb.paper">
+                                <span class="Nitem_link_menu">신문보기</span>
+                            </a>
+                        </li>
+                        <li class="Nlist_item" role="presentation">
+                            <a href="#" class="Nitem_link wip-tab" role="tab" data-clk="lnb.opi">
+                                <span class="Nitem_link_menu">오피니언</span>
+                            </a>
+                        </li>
+                        <li class="Nlist_item" role="presentation">
+                            <a href="#" class="Nitem_link wip-tab" role="tab" data-clk="lnb.tv">
+                                <span class="Nitem_link_menu">TV</span>
+                            </a>
+                        </li>
+                        <li class="Nlist_item" role="presentation">
+                            <a href="#" class="Nitem_link wip-tab" role="tab" data-clk="lnb.fact">
+                                <span class="Nitem_link_menu">팩트체크</span>
+                            </a>
+                        </li>
+                        <li class="Nlist_item" role="presentation">
+                            <a href="#" class="Nitem_link wip-tab" role="tab" data-clk="lnb.algo">
+                                <span class="Nitem_link_menu">알고리즘 안내</span>
+                            </a>
+                        </li>
+                        <li class="Nlist_item" role="presentation">
+                            <a href="#" class="Nitem_link wip-tab" role="tab" data-clk="lnb.correct">
+                                <span class="Nitem_link_menu">정정보도 모음</span>
+                            </a>
+                        </li>
+                    </ul>
+                    <div class="Nlnb_menu_my_area">
+                        <a href="#" class="Nlnb_menu_my_link" data-clk="lnb.mypage">MY</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+<!-- ── 본문 ── -->
+<div id="main_container" class="main_container">
+    <div class="main_content">
+
+        <!-- AI 탐지 배너 -->
+        <div class="ai-banner">
+            <div class="ai-banner-icon">&#129302;</div>
+            <div class="ai-banner-text">
+                <strong>AI 가짜뉴스 탐지 필터 가동 중</strong>
+                DVL 모델로 실시간 분석 · 신뢰도 낮은 순으로 카드 하이라이트 · 위험도 70% 이상 기사 블라인드 처리
+            </div>
+            <div class="ai-banner-right">
+                <a href="/refresh" class="refresh-btn">&#8635; 새로고침</a>
+            </div>
+        </div>
+
+        <!-- 날짜 + 탭 서브 메뉴 -->
+        <div class="main_sublnb">
+            <span class="main_sublnb_date">{{ today }}</span>
+            <div class="main_sublnb_menu">
+                <a href="/" class="is_selected">전체 언론사</a>
+                <a href="#">뉴스스탠드</a>
+                <a href="#">라이브러리</a>
+            </div>
+        </div>
+
+        <!-- 언론사별 뉴스 피드 카드 그리드 -->
+        <div class="main_brick">
+
+            {% for news in news_list %}
+            <div class="comp_news_feed {% if news.fake_score >= 70.0 %}cnf_fake_blind{% endif %}">
+
+                <!-- 언론사 헤더 -->
+                <div class="cnf_journal_area">
+                    <span class="cnf_journal_thumb">
+                        <span class="cnf_journal_logo_text">{{ news.press[:2] if news.press|length >= 2 else news.press }}</span>
+                    </span>
+                    <strong class="cnf_journal_name">{{ news.press }}</strong>
+                    <span class="cnf_journal_sub">{{ news.time }}</span>
+                    <button type="button" class="cnf_btn_subscription">+ 구독</button>
+                </div>
+
+                <!-- AI 가짜뉴스 확률 바 -->
+                <div class="cnf_ai_score_area">
+                    <span class="cnf_ai_label">가짜뉴스 확률</span>
+                    <div class="cnf_score_bar_wrap">
+                        <div class="cnf_score_bar" style="width:{{ news.fake_score }}%; background:{% if news.fake_score >= 70.0 %}#ff4d4f{% elif news.fake_score >= 40.0 %}#fa8c16{% else %}#03C75A{% endif %};"></div>
+                    </div>
+                    <span class="cnf_score_val {% if news.fake_score >= 70.0 %}danger{% endif %}">{{ news.fake_score }}%</span>
+                </div>
+
+                <!-- 메인 기사 영역 -->
+                <div class="cnf_news_area">
+                    {% if news.fake_score >= 70.0 %}
+                    <div class="cnf_fake_overlay">
+                        <div class="fake-badge">&#10060; AI 가짜뉴스 감지 · {{ news.fake_score }}%</div>
+                        <div class="fake-badge-sub">사용자 보호를 위해 블라인드 처리</div>
+                    </div>
+                    {% endif %}
+
+                    <div class="cnf_news_thumb_wrap">
+                        <span class="cnf_news_thumb_placeholder">&#128240;</span>
+                    </div>
+
+                    <strong class="cnf_news_title">
+                        <a href="{{ news.url }}" target="_blank" rel="noopener">{{ news.title }}</a>
+                    </strong>
+                </div>
+
+                <!-- 서브 기사 목록 (프로토타입: 카테고리/시간 보조 표시) -->
+                <ul class="cnf_news_list">
+                    <li class="cnf_news_item">
+                        <a href="{{ news.url }}" class="cnf_news" target="_blank">{{ news.category }} · {{ news.time }}</a>
+                    </li>
+                </ul>
+
+            </div>
+            {% endfor %}
+
+        </div><!-- /main_brick -->
+    </div><!-- /main_content -->
+</div><!-- /main_container -->
+
+<footer class="footer">
+    본 서비스는 AI 가짜뉴스 탐지 연구 목적의 프로토타입입니다. &nbsp;|&nbsp; DVL Fake News Detector
+</footer>
+
+<!-- 준비 중 토스트 -->
+<div id="wip-toast" style="
+    display: none;
+    position: fixed;
+    bottom: 32px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(30,30,30,0.92);
+    color: #fff;
+    font-size: 13px;
+    padding: 10px 22px;
+    border-radius: 20px;
+    z-index: 9999;
+    white-space: nowrap;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    pointer-events: none;
+">준비 중인 메뉴입니다</div>
+
+<script>
+    (function () {
+        var toast = document.getElementById('wip-toast');
+        var timer = null;
+
+        document.querySelectorAll('.wip-tab').forEach(function (el) {
+            el.addEventListener('click', function (e) {
+                e.preventDefault();
+                clearTimeout(timer);
+                toast.style.display = 'block';
+                timer = setTimeout(function () { toast.style.display = 'none'; }, 1800);
+            });
+        });
+    })();
+</script>
+
+</body>
+</html>

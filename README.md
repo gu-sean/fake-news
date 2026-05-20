@@ -28,8 +28,23 @@
 
 ## 3. 주요 특징
 
-### Hybrid Architecture 
-* **문맥 의미 분석 + 정량 검증의 결합**: `klue/roberta-base` 모델이 추출한 고차원 문맥 벡터(768차원)와, 텍스트에서 룰 기반으로 추출한 정량적 DVL 플래그(5차원)를 결합(`torch.cat`)하여 최종 분류기(MLP)를 통과시키는 하이브리드 신경망 구조입니다. 의미론적 흐름과 통계적 왜곡을 동시에 탐지하여 정밀도를 극대화합니다.
+### TF-IDF + DVL Hybrid Architecture
+* **텍스트 벡터 + 정량 지표의 결합**: TF-IDF로 추출한 고빈도 어휘 벡터(50,000차원)와, 텍스트에서 룰 기반으로 추출한 정량적 DVL 플래그(5차원)를 `hstack`으로 결합(총 50,005차원)하여 분류기에 입력하는 하이브리드 구조입니다. 어휘 패턴과 통계적 왜곡을 동시에 탐지하여 정밀도를 극대화합니다.
+
+### 이중 언어 분리 벡터화
+* **영어(Kaggle) 24,973건**: `clean_message` 기준 TF-IDF 벡터화, `stop_words='english'` 적용
+* **한국어(AI Hub) 318,235건**: KoNLPy(Okt) 형태소 분석 후 TF-IDF 벡터화, 형태소 분석 결과는 `unified_news_tokenized.csv`에 캐싱하여 재실행 시 재사용
+* 두 언어 모두 `unified_news_refined.csv` 단일 소스에서 `media` 컬럼으로 분리
+
+### 네이버 뉴스 클론 사이트
+* **BeautifulSoup 크롤링**: 네이버 뉴스 언론사별 많이 본 뉴스 순위 실시간 수집 (기사 본문 포함)
+* **FastAPI + Jinja2**: 크롤링 결과를 모델에 통과시켜 신뢰도 점수와 함께 렌더링
+* **자동 정렬**: 진짜 뉴스(낮은 스코어) 상단 배치, 가짜 뉴스(70% 이상) 하단 블라인드 처리
+* **5분 캐시**: 서버 재요청 부하 방지, `/refresh` 엔드포인트로 강제 재크롤링 가능
+
+### 모델 교체 가능 구조
+* `src/models/` 폴더에 `.joblib` 파일만 교체하면 즉시 다른 모델로 전환
+* 현재: 로지스틱 회귀(Low-level) → 추후 SVM(Mid-level) 추가 예정
 
 ### DVL (Dynamic Verification Layer) 5대 패턴 분류
 가짜뉴스 특유의 통계적 왜곡과 자극적 조작 패턴을 잡아내기 위해, 본문 텍스트에서 5대 정량 플래그를 추출하여 분류 특징(Feature)으로 활용합니다.
@@ -64,39 +79,55 @@
 
 ```text
 fake_news/
+ ├── app.py                         # FastAPI 서버 — 라우트 + Jinja2 HTML 렌더링
  ├── main.py                        # 학습 실행 진입점 (CLI 래퍼)
  ├── requirements.txt               # 패키지 의존성 목록
  ├── README.md                      # 프로젝트 설명 문서
- ├── .gitignore                     # Git 관리 제외 파일 설정
  │
- ├── src/                           # 프로젝트 핵심 소스 코드 패키지
- │   ├── preprocess.py              # 데이터 전처리 (로딩·7단계 정제·DVL 필터링 통합)
- │   ├── split_dataset.py           # 메모리(RAM) 방어용 대용량 데이터 분할 스크립트
- │   ├── dataset.py                 # Lazy Tokenization & Dynamic Padding 구현 PyTorch 데이터셋
- │   ├── model.py                   # KLUE-RoBERTa + DVL 결합 하이브리드 MLP 신경망 구조
- │   └── train.py                   # 차등 학습률(Differential LR) 최적화 기반 학습 코어 스크립트
+ ├── src/                           # 핵심 소스 코드
+ │   ├── crawler.py                 # 네이버 뉴스 BeautifulSoup 크롤러 (언론사별 순위 기사 수집)
+ │   ├── detector.py                # 모델·벡터라이저 로드, 가짜뉴스 확률 예측, 타임라인 정렬
+ │   ├── vectorize.py               # TF-IDF 벡터화 마스터 스크립트 (영어·한국어 분리 처리)
+ │   ├── logistic.py                # 로지스틱 회귀 학습 스크립트 (data/vector/ → src/models/ 저장)
+ │   ├── preprocess.py              # 데이터 전처리 (로딩·7단계 정제·DVL 플래그 추출)
+ │   ├── split_dataset.py           # 메모리 방어용 대용량 데이터 분할 스크립트
+ │   └── models/                    # 학습 완료 모델 저장소 (joblib 교체만으로 모델 전환)
+ │       ├── english_logistic.joblib  # 영어 로지스틱 회귀 최고 성능 모델
+ │      
+ │      
+ │      
  │
  ├── data/                          # 데이터셋 저장 디렉토리
- │   ├── raw/                       # 원천 데이터 백업 디렉토리 
- │   │   ├── Fake.csv               # 영어 가짜뉴스 원본 데이터셋
- │   │   ├── True.csv               # 영어 진짜뉴스 원본 데이터셋
- │   │   ├── Fake_Real_News_Data.csv # 믹스드 가짜뉴스 데이터셋
+ │   ├── raw/                       # 원천 데이터 (변경 없이 보존)
+ │   │   ├── Fake.csv               # 영어 가짜뉴스 (Kaggle)
+ │   │   ├── True.csv               # 영어 진짜뉴스 (Kaggle)
+ │   │   ├── Fake_Real_News_Data.csv # 영어 혼합 데이터셋 (Kaggle)
  │   │   ├── Training/
- │   │   │   └── 02.라벨링데이터/   # AI HUB 한국어 데이터 zip 파트 (42개)
+ │   │   │   └── 02.라벨링데이터/   # AI Hub 한국어 학습 데이터 zip (42개)
  │   │   └── Validation/
- │   │       └── 02.라벨링데이터/   # AI HUB 한국어 데이터 zip 파트 (42개)
+ │   │       └── 02.라벨링데이터/   # AI Hub 한국어 검증 데이터 zip (42개)
  │   │
- │   └── processed/                 # 전처리 완료 산출물 디렉토리
- │       ├── unified_news_refined.csv # 7단계 파이프라인 완결 전체 데이터 (343,208건)
- │       ├── training_results.txt   # 에포크별 Loss, Accuracy, F1-Score 학습 결과 요약본
- │       └── subsets/               # split_dataset.py 실행 결과물 (OOM 방어 목적)
- │           ├── subset_01.csv      # 진짜/가짜 각각 15,000건 균등 분할 믹스 (총 30,000건)
- │           ├── subset_02.csv      # 각 subset별 독립적 인덱스(id) 재부여
- │           └── ... (subset_11.csv 까지 균등 분할 배치 완료)
+ │   ├── processed/                 # 전처리 완료 산출물
+ │   │   ├── unified_news_refined.csv   # 최종 전처리 완료 데이터 (영어 24,973 + 한국어 318,235 = 343,208건)
+ │   │   ├── unified_news_tokenized.csv # 한국어 Okt 형태소 분석 캐시 (318,235건, 재실행 시 재사용)
+ │   │   └── subsets/               # OOM 방어용 균등 분할 서브셋
+ │   │       └── subset_01~11.csv   # 각 30,000건 (진짜·가짜 균등 믹스)
+ │   │
+ │   └── vector/                    # TF-IDF 벡터화 결과물 (vectorize.py 생성)
+ │       ├── english_tfidf.npz      # 영어 TF-IDF 희소 행렬 (24,973 × 50,000)
+ │       ├── english_labels.npy     # 영어 레이블 (0=진짜, 1=가짜)
+ │       ├── english_dvl_flags.npy  # 영어 DVL 5대 플래그 (24,973 × 5)
+ │       ├── english_vectorizer.pkl # 영어 TF-IDF 벡터라이저
+ │       ├── korean_tfidf.npz       # 한국어 TF-IDF 희소 행렬 (318,235 × 50,000)
+ │       ├── korean_labels.npy      # 한국어 레이블
+ │       ├── korean_dvl_flags.npy   # 한국어 DVL 5대 플래그 (318,235 × 5)
+ │       └── korean_vectorizer.pkl  # 한국어 TF-IDF 벡터라이저
  │
- ├── checkpoints/                   # 학습 완료 모델 가중치 저장소
- │   └── best_model.pt              # Validation 세트 기준 macro-F1 최고 성능 가중치 파일
+ ├── templates/                     # Jinja2 HTML 템플릿
+ │   └── naver_news_clone.html      # 네이버 뉴스 클론 UI (신뢰도 정렬 타임라인)
  │
- └── docs/                          # 프로젝트 연구 및 설계 산출물 아카이빙 폴더
-     └── 전처리_및_전체_설계_정리.pdf # 연구 방법론 및 정밀 설계서 전문 (PDF)
+ └── docs/                          # 연구 및 설계 산출물
+     ├── logistic.py 코드 분석(임시).pdf
+     ├── 가짜뉴스_로지스틱(임시).pdf
+     └── 전처리 및 전체 설계 정리.pdf
 

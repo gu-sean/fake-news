@@ -1,57 +1,112 @@
-# 학습 실행 진입점
+"""
+통합 실행 진입점
+
+사용법:
+  python main.py --step all        # 벡터화 → 학습 → 서버 순서대로
+  python main.py --step vectorize  # TF-IDF 벡터화만
+  python main.py --step train      # 모델 학습만
+  python main.py --step server     # 웹 서버만
+
+옵션:
+  --lang   korean / english / both  (train 단계에서 사용, 기본: both)
+  --port   웹 서버 포트 (기본: 8000)
+"""
 
 import argparse
 import sys
 import subprocess
 from pathlib import Path
 
-root_dir = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent
+
+
+def run(cmd: list[str], label: str):
+    print(f'\n{"="*50}')
+    print(f' {label}')
+    print(f'{"="*50}')
+    try:
+        subprocess.run(cmd, check=True, cwd=str(ROOT))
+    except subprocess.CalledProcessError as e:
+        print(f'[ERROR] {label} 실패 (exit code {e.returncode})')
+        sys.exit(1)
+
+
+def step_vectorize():
+    vec_files = list((ROOT / 'data' / 'vector').glob('*.npz'))
+    if vec_files:
+        print('[vectorize] 벡터 파일이 이미 존재합니다. 건너뜁니다.')
+        print('  재생성하려면 python src/vectorize.py 를 직접 실행하세요.')
+        return
+    run([sys.executable, 'src/vectorize.py'], 'TF-IDF 벡터화')
+
+
+def step_train(lang: str):
+    run(
+        [sys.executable, 'src/logistic.py', '--lang', lang],
+        f'로지스틱 회귀 학습 ({lang})',
+    )
+
+
+def step_server(port: int):
+    print(f'\n{"="*50}')
+    print(f' FastAPI 웹 서버 시작')
+    print(f' http://localhost:{port}')
+    print(f' API 문서: http://localhost:{port}/docs')
+    print(f'{"="*50}')
+    subprocess.run(
+        [sys.executable, '-m', 'uvicorn', 'app:app',
+         '--host', '0.0.0.0', '--port', str(port)],
+        cwd=str(ROOT),
+    )
 
 
 def main():
-    parser = argparse.ArgumentParser(description="DVL Fake News Detector - 학습 실행")
-    parser.add_argument("--data_path",      default="data/processed/unified_news_refined.csv",
-                        help="전처리 완료된 CSV 파일 경로")
-    parser.add_argument("--checkpoint_dir", default="checkpoints",
-                        help="모델 체크포인트 저장 경로")
-    parser.add_argument("--epochs",         type=int,   default=5)
-    parser.add_argument("--batch_size",     type=int,   default=16)
-    parser.add_argument("--freeze_layers",  type=int,   default=0,
-                        help="하위 N개 인코더 레이어 고정 (메모리 절약용)")
-    parser.add_argument("--result_path",   default="data/processed/training_results.txt",
-                        help="학습 결과를 저장할 txt 파일 경로")
+    parser = argparse.ArgumentParser(description='DVL Fake News Detector')
+    parser.add_argument(
+        '--step',
+        choices=['all', 'vectorize', 'train', 'server'],
+        default='server',
+        help='실행할 단계 (기본: server)',
+    )
+    parser.add_argument(
+        '--lang',
+        choices=['korean', 'english', 'both'],
+        default='both',
+        help='학습 언어 선택 (기본: both)',
+    )
+    parser.add_argument(
+        '--port',
+        type=int,
+        default=8000,
+        help='웹 서버 포트 (기본: 8000)',
+    )
     args = parser.parse_args()
 
-    data_path = root_dir / args.data_path
-    if not data_path.exists():
-        print(f"오류: 전처리된 데이터 파일이 없습니다: {data_path}")
-        print("먼저 전처리를 실행하세요: python src/preprocess.py")
+    # 필수 파일 존재 확인
+    if not (ROOT / 'data' / 'processed' / 'unified_news_refined.csv').exists():
+        print('[ERROR] data/processed/unified_news_refined.csv 가 없습니다.')
+        print('  먼저 전처리를 실행하세요: python src/preprocess.py')
         sys.exit(1)
 
-    train_script = root_dir / "src" / "train.py"
-    if not train_script.exists():
-        print(f"오류: {train_script} 파일이 없습니다.")
-        sys.exit(1)
+    if args.step == 'all':
+        step_vectorize()
+        step_train(args.lang)
+        step_server(args.port)
 
-    print("=== 학습 시작 ===")
-    try:
-        subprocess.run(
-            [sys.executable, "-m", "src.train",
-             "--data_path",      args.data_path,
-             "--checkpoint_dir", args.checkpoint_dir,
-             "--epochs",         str(args.epochs),
-             "--batch_size",     str(args.batch_size),
-             "--freeze_layers",  str(args.freeze_layers),
-             "--result_path",    args.result_path],
-            check=True,
-            cwd=str(root_dir),
-        )
-    except subprocess.CalledProcessError as e:
-        print(f"오류 발생: 학습 실패 (exit code {e.returncode})")
-        sys.exit(1)
+    elif args.step == 'vectorize':
+        step_vectorize()
 
-    print("=== 학습 완료 ===")
+    elif args.step == 'train':
+        # 벡터 파일 없으면 먼저 벡터화 실행
+        vec_files = list((ROOT / 'data' / 'vector').glob('*.npz'))
+        if not vec_files:
+            print('[train] 벡터 파일이 없어 벡터화를 먼저 실행합니다.')
+            step_vectorize()
+        step_train(args.lang)
+
+    elif args.step == 'server':
+        step_server(args.port)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
