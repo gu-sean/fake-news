@@ -25,7 +25,7 @@ ENGLISH_POS_PREFIXES = ("NN", "VB", "JJ")
 
 # Keep Korean-only and English-only tokens separated for clearer visual analysis.
 # 더 명확한 시각적 분석을 위해 한국어 전용 토큰과 영어 전용 토큰을 분리하여 보관합니다.
-KOREAN_RE = re.compile(r"^[가-힣]+$")
+KOREAN_RE = re.compile(r"^[\uac00-\ud7a3]+$")
 ENGLISH_RE = re.compile(r"^[A-Za-z]+$")
 
 DEFAULT_FONT_PATHS = [
@@ -399,8 +399,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--fake-label",
         type=int,
-        default=0,
-        help="Label value treated as fake news. Default: 0.",
+        default=1,
+        help="Label value treated as fake news. Default: 1.",
     )
     parser.add_argument(
         "--chunksize",
