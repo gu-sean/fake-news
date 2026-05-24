@@ -1,11 +1,13 @@
 # Fake-News
 
-뉴스 크롤링 및 모델 기반 가짜뉴스 판별 시스템
+네이버 뉴스 실시간 크롤링 + 머신러닝 기반 가짜뉴스 탐지 시스템
 
 
 ## 1. 프로젝트 개요
 
-딥러닝 기반 자연어 처리(NLP)를 활용해 가짜 뉴스를 실시간으로 탐지하고, 정보의 신뢰도를 확보하여 사회적 혼란을 방지합니다.
+TF-IDF 벡터화와 로지스틱 회귀(Logistic Regression) 기반 머신러닝 모델을 활용해 가짜 뉴스 탐지 시스템을 구축합니다.  
+네이버 뉴스를 실시간으로 크롤링하고, 각 기사의 진위 여부를 AI가 분석해 사용자에게 신뢰도 점수와 함께 제공합니다.
+
 
 
 ## 2. 데이터 표준 스키마 (Schema)
@@ -37,10 +39,11 @@
 * 두 언어 모두 `unified_news_refined.csv` 단일 소스에서 `media` 컬럼으로 분리
 
 ### 네이버 뉴스 클론 사이트
-* **BeautifulSoup 크롤링**: 네이버 뉴스 언론사별 많이 본 뉴스 순위 실시간 수집 (기사 본문 포함)
-* **FastAPI + Jinja2**: 크롤링 결과를 모델에 통과시켜 신뢰도 점수와 함께 렌더링
-* **자동 정렬**: 진짜 뉴스(낮은 스코어) 상단 배치, 가짜 뉴스(70% 이상) 하단 블라인드 처리
-* **5분 캐시**: 서버 재요청 부하 방지, `/refresh` 엔드포인트로 강제 재크롤링 가능
+* **aiohttp 비동기 크롤링**: 20개 동시 요청으로 네이버 뉴스 카테고리별 기사 실시간 수집 (Phase 1: 목록, Phase 2: 본문)
+* **FastAPI + Jinja2**: 크롤링 결과에 AI 탐지 점수를 부여해 네이버 뉴스 UI 형태로 렌더링
+* **AI 배지 표시**: 점수 50% 이상 → `가짜 X%` (빨간색), 50% 미만 → `진짜` (초록색)
+* **전체 섹션 사전 워밍**: 서버 시작 시 모든 탭(정치·경제·사회 등)을 백그라운드에서 사전 크롤링 → 탭 전환 즉시 기사 표시
+* **5분 자동 갱신**: 주기적으로 전체 캐시를 자동 새로고침, `/refresh` 엔드포인트로 강제 재크롤링 가능
 
 ### 모델 교체 가능 구조
 * `src/models/` 폴더에 `.joblib` 파일만 교체하면 즉시 다른 모델로 전환
@@ -79,55 +82,71 @@
 
 ```text
 fake_news/
- ├── app.py                         # FastAPI 서버 — 라우트 + Jinja2 HTML 렌더링
- ├── main.py                        # 학습 실행 진입점 (CLI 래퍼)
- ├── requirements.txt               # 패키지 의존성 목록
- ├── README.md                      # 프로젝트 설명 문서
+ ├── app.py                              # FastAPI 서버 — 라우트·캐시·전체 섹션 사전 워밍·5분 자동 갱신
+ ├── main.py                             # 학습 실행 진입점 (CLI 래퍼)
+ ├── requirements.txt                    # 패키지 의존성 목록
+ ├── README.md                           # 프로젝트 설명 문서
  │
- ├── src/                           # 핵심 소스 코드
- │   ├── crawler.py                 # 네이버 뉴스 BeautifulSoup 크롤러 (언론사별 순위 기사 수집)
- │   ├── detector.py                # 모델·벡터라이저 로드, 가짜뉴스 확률 예측, 타임라인 정렬
- │   ├── vectorize.py               # TF-IDF 벡터화 마스터 스크립트 (영어·한국어 분리 처리)
- │   ├── logistic.py                # 로지스틱 회귀 학습 스크립트 (data/vector/ → src/models/ 저장)
- │   ├── preprocess.py              # 데이터 전처리 (로딩·7단계 정제·DVL 플래그 추출)
- │   ├── split_dataset.py           # 메모리 방어용 대용량 데이터 분할 스크립트
- │   └── models/                    # 학습 완료 모델 저장소 (joblib 교체만으로 모델 전환)
- │       ├── english_logistic.joblib  # 영어 로지스틱 회귀 최고 성능 모델
- │      
- │      
- │      
+ ├── src/                                # 핵심 소스 코드
+ │   ├── crawler.py                      # 네이버 뉴스 크롤러 — aiohttp 비동기 20개 동시 수집
+ │   │                                   #   Phase 1: 목록 페이지 파싱 (즉시 반환)
+ │   │                                   #   Phase 2: 기사 본문 백그라운드 수집 + CSV 저장
+ │   ├── detector.py                     # fake_score 부여 및 최신순 정렬
+ │   │                                   #   (모델 미연결 시 랜덤 점수, 연결 후 실제 예측으로 교체)
+ │   ├── vectorize.py                    # TF-IDF 벡터화 마스터 스크립트 (영어·한국어 분리 처리)
+ │   ├── logistic_V1.py                  # 로지스틱 회귀 V1 학습 스크립트 (→ data/vector/ 저장)
+ │   ├── preprocess.py                   # 데이터 전처리 (로딩·정제·DVL 플래그 추출)
+ │   └── split_dataset.py                # 메모리 방어용 대용량 데이터 균등 분할 스크립트
  │
- ├── data/                          # 데이터셋 저장 디렉토리
- │   ├── raw/                       # 원천 데이터 (변경 없이 보존)
- │   │   ├── Fake.csv               # 영어 가짜뉴스 (Kaggle)
- │   │   ├── True.csv               # 영어 진짜뉴스 (Kaggle)
- │   │   ├── Fake_Real_News_Data.csv # 영어 혼합 데이터셋 (Kaggle)
+ ├── data/                               # 데이터셋 저장 디렉토리
+ │   ├── raw/                            # 원천 데이터
+ │   │   ├── Fake.csv                    # 영어 가짜뉴스 (Kaggle)
+ │   │   ├── True.csv                    # 영어 진짜뉴스 (Kaggle)
+ │   │   ├── Fake_Real_News_Data.csv     # 영어 혼합 데이터셋 (Kaggle)
+ │   │   ├── fake_real_news.arff         # ARFF 포맷 영어 혼합 데이터셋
  │   │   ├── Training/
- │   │   │   └── 02.라벨링데이터/   # AI Hub 한국어 학습 데이터 zip (42개)
+ │   │   │   └── 02.라벨링데이터/        # AI Hub 한국어 학습 데이터 zip (42개)
+ │   │   │       └── TL_Part1~2_*.zip
  │   │   └── Validation/
- │   │       └── 02.라벨링데이터/   # AI Hub 한국어 검증 데이터 zip (42개)
+ │   │       └── 02.라벨링데이터/        # AI Hub 한국어 검증 데이터 zip (42개)
+ │   │           └── VL_Part1~2_*.zip
  │   │
- │   ├── processed/                 # 전처리 완료 산출물
- │   │   ├── unified_news_refined.csv   # 최종 전처리 완료 데이터 (영어 24,973 + 한국어 318,235 = 343,208건)
- │   │   ├── unified_news_tokenized.csv # 한국어 Okt 형태소 분석 캐시 (318,235건, 재실행 시 재사용)
- │   │   └── subsets/               # OOM 방어용 균등 분할 서브셋
- │   │       └── subset_01~11.csv   # 각 30,000건 (진짜·가짜 균등 믹스)
+ │   ├── processed/                      # 전처리 완료 산출물
+ │   │   ├── unified_news_refined.csv    # 최종 전처리 완료 데이터
+ │   │   ├── unified_news_tokenized.csv  # 한국어 Okt 형태소 분석 캐시
+ │   │   └── subsets/                    # OOM 방어용 균등 분할 서브셋
+ │   │       └── subset_01~11.csv        # 각 30,000건 (진짜·가짜 균등 믹스)
  │   │
- │   └── vector/                    # TF-IDF 벡터화 결과물 (vectorize.py 생성)
- │       ├── english_tfidf.npz      # 영어 TF-IDF 희소 행렬 (24,973 × 50,000)
- │       ├── english_labels.npy     # 영어 레이블 (0=진짜, 1=가짜)
- │       ├── english_dvl_flags.npy  # 영어 DVL 5대 플래그 (24,973 × 5)
- │       ├── english_vectorizer.pkl # 영어 TF-IDF 벡터라이저
- │       ├── korean_tfidf.npz       # 한국어 TF-IDF 희소 행렬 (318,235 × 50,000)
- │       ├── korean_labels.npy      # 한국어 레이블
- │       ├── korean_dvl_flags.npy   # 한국어 DVL 5대 플래그 (318,235 × 5)
- │       └── korean_vectorizer.pkl  # 한국어 TF-IDF 벡터라이저
+ │   ├── realtime/                       # 실시간 크롤링 수집 결과
+ │   │   └── realtime_news.csv           # 네이버 뉴스 실시간 수집 CSV (표준 스키마 + 추가 컬럼)
+ │   │
+ │   └── vector/                         # TF-IDF 벡터화 결과물 (vectorize.py 생성)
+ │       ├── english_tfidf.npz           # 영어 TF-IDF 희소 행렬
+ │       ├── english_labels.npy          # 영어 레이블 (0=진짜, 1=가짜)
+ │       ├── english_dvl_flags.npy       # 영어 DVL 5대 플래그
+ │       ├── english_vectorizer.pkl      # 영어 TF-IDF 벡터라이저
+ │       ├── korean_tfidf.npz            # 한국어 TF-IDF 희소 행렬
+ │       ├── korean_labels.npy           # 한국어 레이블
+ │       ├── korean_dvl_flags.npy        # 한국어 DVL 5대 플래그
+ │       └── korean_vectorizer.pkl       # 한국어 TF-IDF 벡터라이저
  │
- ├── templates/                     # Jinja2 HTML 템플릿
- │   └── naver_news_clone.html      # 네이버 뉴스 클론 UI (신뢰도 정렬 타임라인)
+ ├── templates/                          # Jinja2 HTML 템플릿 + 정적 파일
+ │   ├── naver_news_clone.html           # 네이버 뉴스 클론 UI (AI 탐지 배지·카테고리·페이지네이션)
+ │   ├── newshome.css                    # 메인 레이아웃 스타일시트
+ │   └── news.css                        # 기사 상세 페이지 스타일시트
  │
- └── docs/                          # 연구 및 설계 산출물
+ ├── visualization/                      # 데이터 시각화
+ │   ├── src/
+ │   │   ├── data_visual1.py             # 클래스 분포 차트 생성 스크립트
+ │   │   ├── data_visual2.py             # 단어 빈도 차트 생성 스크립트
+ │   │   └── data_visual3.py             # TF-IDF 시각화 스크립트
+ │   └── img/
+ │       ├── data_visual1_class_distribution.png   # 클래스 분포 차트
+ │       ├── data_visual2_word_frequency.png        # 단어 빈도 차트
+ │       └── data_visual3_tfidf.png                 # TF-IDF 시각화 이미지
+ │
+ └── docs/                               # 연구 및 설계 산출물
      ├── logistic.py 코드 분석(임시).pdf
      ├── 가짜뉴스_로지스틱(임시).pdf
      └── 전처리 및 전체 설계 정리.pdf
-
+```
