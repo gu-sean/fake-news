@@ -54,17 +54,32 @@ async def _get_soup(session: aiohttp.ClientSession, url: str) -> BeautifulSoup |
         async with session.get(url) as resp:
             resp.raise_for_status()
             text = await resp.text(errors='replace')
-            return BeautifulSoup(text, 'html.parser')
+            return await asyncio.to_thread(BeautifulSoup,text, 'lxml')
     except Exception as e:
         print(f'[crawler] request failed: {url} -> {e}')
         return None
 
 
 async def _fetch_article_body(session: aiohttp.ClientSession, url: str) -> str:
-    """기사 상세 페이지 본문 비동기 크롤링."""
-    soup = await _get_soup(session, url)
-    if not soup:
+    """기사 상세 페이지 본문 비동기 크롤링 (네트워크 다운로드만 비동기 처리)"""
+    try:
+        async with session.get(url) as resp:
+            resp.raise_for_status()
+            text = await resp.text(errors='replace')
+            
+            # [최적화 3] 다운로드된 텍스트를 스레드 풀로 넘겨 백그라운드에서 정제 및 추출합니다.
+            return await asyncio.to_thread(_extract_body_sync, text)
+    except Exception as e:
+        print(f'[crawler] body fetch failed: {url} -> {e}')
         return ''
+
+
+def _extract_body_sync(text: str) -> str:
+    """
+    CPU 소모가 큰 본문 파싱, 태그 탐색, decompose(제거) 연산을 
+    하나의 동기 함수로 묶어 멀티스레드 환경에서 처리하도록 분리합니다.
+    """
+    soup = BeautifulSoup(text, 'lxml')
     for sel in [
         '#dic_area',
         '._article_body_contents',
@@ -80,18 +95,31 @@ async def _fetch_article_body(session: aiohttp.ClientSession, url: str) -> str:
     return ''
 
 
+
 def _parse_listing_page(soup: BeautifulSoup, articles: list[dict], idx: int) -> int:
-    """목록 페이지 soup에서 기사 메타데이터를 파싱해 articles에 추가. 갱신된 idx 반환."""
+    """목록 페이지 soup에서 기사 메타데이터를 파싱해 articles에 추가. 갱신된 idx 반환.
+
+    지원 구조:
+      - ul.type06_headline / ul.type06 : 요약형 (dt 기반, dd 안에 press/date)
+      - ul.type02                       : 제목형 (li 안에 a·span 직접 배치)
+        → 연합뉴스 속보(LPOD 모드) 등에서 사용
+    """
     items = (soup.select('.list_body ul.type06_headline li')
-             + soup.select('.list_body ul.type06 li'))
+             + soup.select('.list_body ul.type06 li')
+             + soup.select('.list_body ul.type02 li'))   # ← 연합뉴스 LPOD 구조 추가
 
     for item in items:
         try:
             img_tag   = item.select_one('dt.photo img')
             image_url = img_tag['src'] if img_tag else None
 
-            title_container = item.select('dt')[-1]
-            a_tag = title_container.select_one('a')
+            dts = item.select('dt')
+            if dts:
+          
+                a_tag = dts[-1].select_one('a')
+            else:
+               
+                a_tag = item.select_one('a')
             if not a_tag:
                 continue
 
@@ -101,10 +129,12 @@ def _parse_listing_page(soup: BeautifulSoup, articles: list[dict], idx: int) -> 
             summary_el = item.select_one('dd span.lede')
             summary    = summary_el.get_text(strip=True) if summary_el else ''
 
-            press_el = item.select_one('dd span.writing')
+            press_el = (item.select_one('dd span.writing')
+                        or item.select_one('span.writing'))
             press    = press_el.get_text(strip=True) if press_el else '알 수 없음'
 
-            time_el  = item.select_one('dd span.date')
+            time_el  = (item.select_one('dd span.date')
+                        or item.select_one('span.date'))
             pub_time = time_el.get_text(strip=True) if time_el else datetime.now().strftime('%H:%M')
 
             if not title or not url:
@@ -137,10 +167,8 @@ def _parse_listing_page(soup: BeautifulSoup, articles: list[dict], idx: int) -> 
 
 async def fetch_listing_pages(max_pages: int = MAX_CRAWL_PAGES,
                                base_url: str = None) -> list[dict]:
-    """
-    Phase 1: 목록 페이지를 20개 동시 요청으로 수집.
-    aiohttp + asyncio.gather 
-    """
+    """Phase 1: 목록 페이지를 max_pages개 동시 요청으로 수집 (aiohttp + asyncio.gather).
+    app.py에서는 메인=3, 메인섹션=2, 세부섹션=1 로 호출."""
     if base_url is None:
         base_url = BASE_FLASH_URL
 
@@ -284,7 +312,6 @@ def save_to_csv(articles: list[dict], filename: str = "data/realtime/realtime_ne
     out.to_csv(filename, index=False, encoding='utf-8-sig')
     print(f"[crawler] 총 {len(out)}개 뉴스 CSV 저장 완료: {filename}")
 
-    # 계산된 플래그를 원본 article dict에 반영
     flag_cols = ['stat_distortion', 'causal_error', 'emotional_provocation',
                  'source_lack', 'img_mismatch']
     for article, flags in zip(articles, out[flag_cols].to_dict('records')):
