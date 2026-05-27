@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>{% if section_id and section_name %}{{ section_name }} 속보{% else %}속보{% endif %} : 네이버 뉴스</title>
+  <link rel="shortcut icon" type="image/x-icon" href="https://mimgnews.pstatic.net/image/news/m/2023/favicon/favicon.ico">
+  <link rel="stylesheet" type="text/css" href="/static/newshome.css">
+  <style>
+    /* ── 기본 ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Malgun Gothic', 돋움, sans-serif; background: #fff; color: #1a1a1a; }
+    a { text-decoration: none; color: inherit; }
+    a:hover { text-decoration: underline; }
+    .blind { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+
+    /* ── 네이버 뉴스 테이블 레이아웃 ──────────────────── */
+    #newsct { max-width: 1100px; margin: 0 auto; padding: 0 15px; }
+    table.container { width: 100%; border-collapse: collapse; }
+    col.col_snb { width: 130px; }
+    col.col_aside { width: 320px; }
+    td.snb { width: 130px; vertical-align: top; padding: 20px 20px 30px 0; }
+    td.content { vertical-align: top; padding: 20px 20px 30px; }
+    td.aside { width: 320px; vertical-align: top; padding: 20px 0 30px 20px; }
+
+    /* ── SNB (왼쪽 카테고리 메뉴) ────────────────────── */
+    div#snb h2 { font-size: 14px; font-weight: bold; margin: 0 0 8px; }
+    div#snb h2 a { color: #1a1a1a; }
+    div#snb .nav { list-style: none; margin: 0 0 15px; padding: 0; }
+    div#snb .nav li a { display: block; font-size: 12px; color: #555; padding: 4px 0; }
+    div#snb .nav li a:hover { color: #03c75a; text-decoration: none; }
+    /* ── type02 기사 목록 ────────────────────────────── */
+    ul.type02 { list-style: none; margin: 0 0 16px; padding: 0; }
+    ul.type02 > li { padding: 7px 0; border-bottom: 1px solid #eaebf0; font-size: 13px; line-height: 1.5; }
+    ul.type02 > li > a { color: #1a1a1a; }
+    ul.type02 > li > a:hover { color: #0069c0; text-decoration: underline; }
+    ul.type02 .icon_photo { display: none; }
+    ul.type02 .r_ico { display: inline-block; font-size: 0; width: 0; overflow: hidden; }
+    ul.type02 .writing { color: #909090; font-size: 11px; margin-left: 6px; }
+    ul.type02 .newspaper_info { color: #909090; font-size: 11px; margin-left: 41px; }
+    ul.type02 .date.is_new { color: #c0c0c0; font-size: 11px; margin-left: 4px; }
+    ul.type02 li.is_danger > a { color: #c0392b; }
+    ul.type02 li.is_danger { background: #fff8f8; }
+
+    /* ── newsflash 헤더 ──────────────────────────────── */
+    .newsflash_header { display: flex; align-items: center; padding-bottom: 10px; border-bottom: 2px solid #000; margin-bottom: 12px; }
+    .newsflash_header h3 { font-size: 15px; font-weight: bold; margin: 0; flex: 1; }
+    .view_type { font-size: 12px; white-space: nowrap; }
+    .view_type a { color: #555; margin-left: 6px; }
+    .view_type .bar { color: #ccc; margin: 0 2px; }
+    .view_type .tit_on { font-weight: bold; color: #333; }
+
+    /* ── 페이징 ──────────────────────────────────────── */
+    .paging { text-align: center; padding: 20px 0 10px; }
+    .paging strong { display: inline-block; padding: 4px 8px; font-size: 13px; font-weight: bold; color: #000; }
+    .paging a { display: inline-block; padding: 4px 8px; font-size: 13px; color: #555; }
+    .paging a:hover { color: #0069c0; }
+    .pagenavi_day { text-align: center; padding: 8px 0 20px; font-size: 12px; color: #555; }
+    .pagenavi_day .viewday { font-weight: bold; color: #000; }
+    .pagenavi_day .devidebar { color: #ccc; margin: 0 4px; }
+
+    /* ── AI 가짜뉴스 탐지 배지 ────────────────────────── */
+    .ai_badge { display: inline-flex; align-items: center; padding: 2px 5px; border-radius: 3px; font-size: 10px; font-weight: bold; margin-left: 5px; vertical-align: middle; white-space: nowrap; }
+    .ai_badge.safe    { background: #e8f9ee; color: #00a650; border: 1px solid #a8dbb9; }
+    .ai_badge.warning { background: #fff8e6; color: #e07b00; border: 1px solid #ffd98a; }
+    .ai_badge.danger  { background: #fff1f0; color: #e03131; border: 1px solid #ffb3b3; }
+
+    /* ── aside (오른쪽 사이드바) ─────────────────────── */
+    td.aside { height: 1px; }                        /* 테이블 셀 100% height 트릭 */
+    div.aside { height: 100%; display: flex; flex-direction: column; }
+    div.aside > .section { margin-bottom: 20px; }
+    div.aside h4 { font-size: 14px; font-weight: bold; margin: 0 0 10px; }
+    .section_sub_txt { font-size: 11px; color: #999; margin: -6px 0 10px; }
+    .section_info_icon { background: none; border: 1px solid #ccc; border-radius: 10px; padding: 2px 5px; font-size: 10px; cursor: pointer; vertical-align: middle; white-space: nowrap; line-height: 1.2; }
+    .section_info_layer { background: #fff; border: 1px solid #ccc; padding: 8px 10px; font-size: 11px; color: #555; margin-bottom: 8px; }
+    .section_list_ranking_press { list-style: none; margin: 0; padding: 0; }
+    .section_list_ranking_press li { display: flex; gap: 8px; padding: 8px 0; border-bottom: 1px solid #f4f4f4; align-items: flex-start; }
+    .section_list_ranking_press li:last-child { border-bottom: none; }
+    .ranking_thumb { flex-shrink: 0; }
+    .ranking_thumb img { width: 88px; height: 60px; object-fit: cover; }
+    .list_text_wrap { flex: 1; min-width: 0; }
+    .list_text_inner { display: flex; flex-direction: column; }
+    .list_tit { font-size: 12px; color: #1a1a1a; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .list_tit:hover { color: #0069c0; }
+    .list_press { font-size: 11px; color: #909090; display: flex; align-items: center; gap: 3px; margin-top: 4px; }
+    .list_press_thumb img { width: 16px; height: 16px; }
+    .refresh_button { display: block; width: 100%; padding: 8px; font-size: 12px; color: #555; border: 1px solid #ddd; background: #fafafa; cursor: pointer; margin-top: 8px; text-align: center; }
+    .refresh_button:hover { background: #f0f0f0; }
+    .list_txt { list-style: none; margin: 0; padding: 0; }
+    .list_txt li { padding: 5px 0; border-bottom: 1px solid #f4f4f4; font-size: 12px; }
+    .list_txt li:last-child { border-bottom: none; }
+    .list_txt li a { color: #1a1a1a; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .list_txt li a:hover { color: #0069c0; }
+    .side_ad { margin-top: 15px; min-height: 250px; background: #f9f9f9; }
+    .banner a img { max-width: 300px; }
+    .more_link { display: inline-block; font-size: 11px; color: #555; margin-top: 6px; }
+    .section h4 a { color: #1a1a1a; }
+    .r_vod_small, .r_vod_txt { display: none; }
+
+    /* ── AI 통계 박스 ────────────────────────────────── */
+    .ai_stat_box { border: 1px solid #e5e5e5; border-radius: 4px; padding: 14px; margin-top: 0; }
+    .ai_stat_box h4 { font-size: 13px; font-weight: bold; margin: 0 0 10px; }
+    .ai_stat_row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; padding: 3px 0; }
+    .ai_stat_note { font-size: 10px; color: #999; margin-top: 10px; border-top: 1px solid #f0f0f0; padding-top: 8px; line-height: 1.6; }
+
+    /* ── type06_headline / type06 (요약형 · 신문게재기사만) ── */
+    ul.type06_headline, ul.type06 { list-style: none; margin: 0 0 16px; padding: 0; }
+    ul.type06_headline > li, ul.type06 > li {
+        display: flex; gap: 10px; padding: 10px 0;
+        border-bottom: 1px solid #eaebf0; align-items: flex-start; }
+    ul.type06_headline > li.is_danger, ul.type06 > li.is_danger { background: #fff8f8; }
+    .thumb_area { flex-shrink: 0; display: block; width: 106px; height: 72px; overflow: hidden; }
+    .thumb_area img { width: 106px; height: 72px; object-fit: cover; display: block; }
+    .thumb_area img:hover { opacity: .85; }
+    .text_area { flex: 1; min-width: 0; }
+    .art_tit_h { display: block; font-size: 14px; font-weight: bold; color: #1a1a1a; margin-bottom: 5px; line-height: 1.45; }
+    .art_tit_n { display: block; font-size: 13px; color: #1a1a1a; margin-bottom: 5px; line-height: 1.45; }
+    .art_tit_h:hover, .art_tit_n:hover { color: #0069c0; text-decoration: underline; }
+    .lede { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+            overflow: hidden; font-size: 12px; color: #555; margin-bottom: 4px; line-height: 1.5; }
+    .type06_meta { font-size: 11px; color: #909090; }
+    .type06_meta .writing { margin-right: 6px; }
+
+    /* ── photo_list (포토만) ──────────────────────────── */
+    ul.photo_list { list-style: none; margin: 0; padding: 0; }
+    ul.photo_list > li { margin-bottom: 14px; }
+    ul.photo_list table { width: 100%; border-collapse: collapse; }
+    ul.photo_list td { padding: 3px; vertical-align: top; text-align: center; }
+    ul.photo_list td a { display: block; }
+    ul.photo_list td img { width: 100%; height: 88px; object-fit: cover; display: block; }
+    ul.photo_list tr.tit td { padding-top: 5px; font-size: 12px; color: #1a1a1a; }
+    ul.photo_list tr.tit td a {
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+        overflow: hidden; line-height: 1.4; color: #1a1a1a; }
+    ul.photo_list tr.tit td a:hover { color: #0069c0; }
+
+    /* ── view_type 탭 활성화 ──────────────────────────── */
+    .view_type .tit_on, .view_type .sum_on,
+    .view_type .photo_on, .view_type .newsp_on { font-weight: bold; color: #333; }
+
+    /* ── SNB 활성화 ──────────────────────────────────── */
+    div#snb h2 a.snb_active { color: #03c75a; font-weight: bold; }
+    div#snb .nav li a.snb_active { color: #03c75a; font-weight: bold; }
+
+    /* ── GNB/LNB 비활성 항목 ──────────────────────────── */
+    .Nitem_disabled { cursor: default !important; }
+    .Nitem_disabled:hover { text-decoration: none !important; color: inherit !important; }
+    .Ngnb_service .Nservice_subitem .disabled_label {
+        display: inline-block; padding: 0 8px;
+        font-size: 12px; color: #bbb; cursor: default; vertical-align: middle; line-height: 40px;
+    }
+
+    /* ── 카테고리 헤더 ────────────────────────────────── */
+    .newsflash_header2 { padding-bottom: 8px; border-bottom: 2px solid #000; margin-bottom: 8px; }
+    .newsflash_header2 h3 { font-size: 16px; font-weight: bold; margin: 0; }
+    .topbox_type1 { margin-bottom: 0; }
+    .topbox_type1 ul.massmedia {
+        list-style: none; margin: 0; padding: 0;
+        display: flex; flex-wrap: wrap; border-bottom: 1px solid #e5e5e5; }
+    .topbox_type1 ul.massmedia li { display: inline-block; }
+    .topbox_type1 ul.massmedia li a {
+        display: inline-block; padding: 6px 10px;
+        font-size: 12px; color: #555; }
+    .topbox_type1 ul.massmedia li a:hover { color: #03c75a; text-decoration: none; }
+    .topbox_type1 ul.massmedia li.on a { color: #03c75a; font-weight: bold; }
+    .newsflash_header3 {
+        display: flex; align-items: center; justify-content: flex-end;
+        padding: 6px 0 8px; margin-bottom: 10px;
+        border-bottom: 1px solid #e5e5e5; }
+
+    /* ── SNB 날짜/링크 유틸리티 바 ───────────────────── */
+    .snb_util_bar {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 8px 0 9px; border-bottom: 1px solid #e5e5e5;
+        margin-bottom: 0; font-size: 11px; }
+    .snb_util_date { color: #555; white-space: nowrap; }
+    .snb_util_links { display: flex; align-items: center; white-space: nowrap; gap: 0; }
+    .snb_util_links a { color: #555; font-size: 11px; padding: 0 5px; }
+    .snb_util_links a:hover { color: #03c75a; text-decoration: none; }
+    .snb_util_links .ubar { color: #d0d0d0; font-size: 10px; }
+
+    /* ── SNB 속보 아래 구분선 ─────────────────────────── */
+    .snb_divider { border: none; border-top: 1px solid #e5e5e5; margin: 6px 0 10px; }
+
+    /* ── 모델 선택 드롭다운 ──────────────────────────── */
+    /* 버튼: GNB 파란 배경(#3f63bf)에 자연스럽게 녹아드는 투명 스타일 */
+    .model_select_wrap {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        height: 52px;           /* GNB 높이와 동일하게 */
+        margin-right: 2px; }
+
+    /* 왼쪽 구분선 — GNB 서브아이템 사이 구분선과 동일한 규칙 */
+    .model_select_wrap::before {
+        content: "";
+        display: inline-block;
+        width: 1px; height: 14px;
+        background: rgba(255,255,255,.25);
+        margin-right: 10px; }
+
+    .model_select_btn {
+        display: inline-flex; align-items: center; gap: 5px;
+        height: 40px; padding: 0 4px 0 0;
+        background: transparent; border: none; outline: none;
+        font-size: 13px; font-family: 'Malgun Gothic', 돋움, sans-serif;
+        color: rgba(255,255,255,.85);
+        cursor: pointer; white-space: nowrap; line-height: 40px;
+        letter-spacing: -.3px; }
+
+    .model_select_btn:hover { color: #fff; }
+    .model_select_btn.is_open { color: #fff; }
+
+    /* 화살표 ▾ */
+    .model_select_arrow {
+        font-size: 9px;
+        display: inline-block;
+        opacity: .7;
+        transition: transform .18s ease; }
+    .model_select_btn:hover  .model_select_arrow,
+    .model_select_btn.is_open .model_select_arrow {
+        opacity: 1; }
+    .model_select_btn.is_open .model_select_arrow {
+        transform: rotate(180deg); }
+
+    /* 드롭다운 목록 — GNB 아래에 흰 카드로 펼쳐짐 */
+    .model_select_menu {
+        display: none;
+        position: absolute;
+        top: 52px;          /* GNB 하단에 딱 붙음 */
+        right: 0;
+        min-width: 170px;
+        background: #fff;
+        border: 1px solid #d9d9d9;
+        border-top: 2px solid #4a72d1;    /* 상단 포인트 라인: GNB 색 계열 */
+        border-radius: 0 0 4px 4px;
+        box-shadow: 0 4px 12px rgba(0,0,0,.13);
+        list-style: none; margin: 0; padding: 4px 0;
+        z-index: 3000; }
+
+    .model_select_menu.is_open { display: block; }
+
+    .model_select_menu li a {
+        display: flex; align-items: center;
+        padding: 10px 16px;
+        font-size: 12px; color: #333;
+        text-decoration: none; white-space: nowrap;
+        transition: background .1s; }
+
+    .model_select_menu li a:hover {
+        background: #f0f4ff;
+        color: #3f63bf;
+        text-decoration: none; }
+
+    .model_select_menu li a.is_active {
+        color: #3f63bf; font-weight: bold; }
+
+    /* 항목 앞 점 */
+    .model_select_menu li a::before {
+        content: "";
+        display: inline-block;
+        width: 5px; height: 5px;
+        border-radius: 50%;
+        background: #c0c8e0;
+        margin-right: 8px;
+        flex-shrink: 0; }
+
+    .model_select_menu li a.is_active::before,
+    .model_select_menu li a:hover::before {
+        background: #3f63bf; }
+
+    .model_select_menu li + li {
+        border-top: 1px solid #f0f0f0; }
+  </style>
+</head>
+<body>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━ GNB / LNB ━━━━━━━━━━━━━━━━━━━━ -->
+<section class="news_header">
+  <header class="nh_header" role="banner">
+    <div class="Ngnb">
+      <div class="Ngnb_inner">
+        <div class="Ngnb_both">
+          <div class="Ngnb_left">
+            <span class="Ngnb_logo">
+              <a href="/view" class="Nlogo_link"><span class="Nicon_logo">NAVER</span></a>
+            </span>
+            <div class="Ngnb_service">
+              <h1 class="Nservice_item">
+                <a href="/view"><span class="Nicon_service">뉴스</span></a>
+              </h1>
+              <span class="Nservice_subitem">
+                <span class="disabled_label">엔터</span>
+              </span>
+              <span class="Nservice_subitem">
+                <span class="disabled_label">스포츠</span>
+              </span>
+              <span class="Nservice_subitem">
+                <span class="disabled_label">날씨</span>
+              </span>
+              <span class="Nservice_subitem">
+                <span class="disabled_label">프리미엄</span>
+              </span>
+            </div>
+          </div>
+          <div class="Ngnb_right">
+            <div class="Ngnb_search is_hidden _search_content">
+              <form action="https://search.naver.com/search.naver" method="get" role="search" accept-charset="utf-8">
+                <input type="hidden" name="where" value="news">
+                <input type="hidden" name="ie" value="utf8">
+                <input type="hidden" name="sm" value="nws_hty">
+                <div id="u_hs" class="u_hs">
+                  <div class="u_hsw">
+                    <div class="u_itw">
+                      <input type="search" name="query" title="검색어 입력" class="u_it _search_input" placeholder="뉴스 검색" maxlength="255" autocomplete="off">
+                      <button type="submit" class="u_hssbt u_hssbt_ss _submit_btn"><span class="u_vc">뉴스검색</span></button>
+                    </div>
+                  </div>
+                  <button type="submit" class="u_hssbt_us _total_search_btn">통합검색</button>
+                  <button type="button" class="u_hssbt_close _close_btn">닫기</button>
+                </div>
+              </form>
+            </div>
+            <!-- ── 모델 선택 드롭다운 (검색 아이콘 왼쪽) ── -->
+            <div class="model_select_wrap" id="modelSelectWrap">
+              <button type="button" class="model_select_btn" id="modelSelectBtn">
+                <span id="modelSelectLabel">모델 선택</span>
+                <span class="model_select_arrow">▾</span>
+              </button>
+              <ul class="model_select_menu" id="modelSelectMenu">
+                <li><a href="javascript:;" class="model_select_item" data-model="logistic">로지스틱 회귀 모델</a></li>
+                <li><a href="javascript:;" class="model_select_item" data-model="svm">SVM 모델</a></li>
+                <li><a href="javascript:;" class="model_select_item" data-model="xgboost">XGBoost 모델</a></li>
+              </ul>
+            </div>
+            <div class="Ngnb_tool">
+              <a href="javascript:;" class="Ntool_button _search_content_toggle_btn"><span class="Nicon_search">검색</span></a>
+            </div>
+          </div>
+        </div>
+        <div class="Nlnb _float_lnb">
+          <div class="Nlnb_inner">
+            <div class="Nlnb_both">
+              <div class="Nlnb_left _lnb_scroll">
+                <div class="Nlnb_menu Ntype_scroll">
+                  <div class="Nlnb_menu_inner _scroll">
+                    <ul class="Nlnb_menu_list" role="menu">
+                      {# 속보: 항상 active 고정 — SNB 카테고리 이동과 별개 #}
+                      <li class="Nlist_item is_active"><a href="/view" class="Nitem_link" role="menuitem" aria-selected="true"><span class="Nitem_link_menu">속보</span></a></li>
+                      {# 언론사별 ~ 팩트체크: 외부 링크 비활성화 (클론 내 미구현) #}
+                      <li class="Nlist_item"><a class="Nitem_link Nitem_disabled" role="menuitem"><span class="Nitem_link_menu">언론사별</span></a></li>
+                      <li class="Nlist_item"><a class="Nitem_link Nitem_disabled" role="menuitem"><span class="Nitem_link_menu">정치</span></a></li>
+                      <li class="Nlist_item"><a class="Nitem_link Nitem_disabled" role="menuitem"><span class="Nitem_link_menu">경제</span></a></li>
+                      <li class="Nlist_item"><a class="Nitem_link Nitem_disabled" role="menuitem"><span class="Nitem_link_menu">사회</span></a></li>
+                      <li class="Nlist_item"><a class="Nitem_link Nitem_disabled" role="menuitem"><span class="Nitem_link_menu">생활/문화</span></a></li>
+                      <li class="Nlist_item"><a class="Nitem_link Nitem_disabled" role="menuitem"><span class="Nitem_link_menu">IT/과학</span></a></li>
+                      <li class="Nlist_item"><a class="Nitem_link Nitem_disabled" role="menuitem"><span class="Nitem_link_menu">세계</span></a></li>
+                      <li class="Nlist_item _isNew"><a class="Nitem_link Nitem_disabled" role="menuitem"><span class="Nitem_link_menu">랭킹</span></a></li>
+                      <li class="Nlist_item _isNew"><a class="Nitem_link Nitem_disabled" role="menuitem"><span class="Nitem_link_menu">신문보기</span></a></li>
+                      <li class="Nlist_item"><a class="Nitem_link Nitem_disabled" role="menuitem"><span class="Nitem_link_menu">오피니언</span></a></li>
+                      <li class="Nlist_item"><a class="Nitem_link Nitem_disabled" role="menuitem"><span class="Nitem_link_menu">TV</span></a></li>
+                      <li class="Nlist_item"><a class="Nitem_link Nitem_disabled" role="menuitem"><span class="Nitem_link_menu">팩트체크</span></a></li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+</section>
+<hr>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━ 메인 테이블 레이아웃 ━━━━━━━━━━━━━━━━━━━━ -->
+<div id="newsct">
+<!-- 날짜 / 언론사 링크 유틸리티 바 -->
+<div class="snb_util_bar">
+  <span class="snb_util_date">{{ today }}</span>
+  <div class="snb_util_links">
+    <a href="#" class="Nitem_disabled">전체 언론사</a><span class="ubar">|</span><a href="#" class="Nitem_disabled">뉴스스탠드</a><span class="ubar">|</span><a href="#" class="Nitem_disabled">라이브러리</a>
+  </div>
+</div>
+<table cellpadding="0" cellspacing="0" class="container">
+    <caption class="blind">기사목록</caption>
+    <colgroup>
+        <col class="col_snb">
+        <col class="col_content">
+        <col class="col_aside">
+    </colgroup>
+    <tbody><tr>
+        <td class="snb">
+            <div id="snb" class="snb">
+
+<h2 class="h"><a href="/view" class="nclicks(lmn_fla.home){% if not section_id %} snb_active{% endif %}">속보</a></h2>
+<hr class="snb_divider">
+<ul class="nav">
+<li><a href="/rview/section/100" class="snb_s{% if section_id == '100' %} snb_active{% endif %}">정치</a></li>
+<li><a href="/rview/section/101" class="snb_s2{% if section_id == '101' %} snb_active{% endif %}">경제</a></li>
+<li><a href="/rview/section/102" class="snb_s3{% if section_id == '102' %} snb_active{% endif %}">사회</a></li>
+<li><a href="/rview/section/103" class="snb_s4{% if section_id == '103' %} snb_active{% endif %}">생활/문화</a></li>
+<li><a href="/rview/section/104" class="snb_s5{% if section_id == '104' %} snb_active{% endif %}">세계</a></li>
+<li><a href="/rview/section/105" class="snb_s6{% if section_id == '105' %} snb_active{% endif %}">IT/과학</a></li>
+<li><a href="/rview/section/110" class="snb_s9{% if section_id == '110' %} snb_active{% endif %}">오피니언</a></li>
+<li><a href="/rview/section/yonhap" class="snb_s10{% if section_id == 'yonhap' %} snb_active{% endif %}">연합뉴스 속보</a></li>
+</ul>
+
+            </div>
+        </td>
+        <td class="content">
+            <div id="main_content" class="content">
+                {% if section_id %}
+                {# ━━━ 카테고리 섹션 헤더 ━━━ #}
+                <div class="list_header newsflash_header2">
+                    <h3>{{ section_name }} 속보</h3>
+                </div>
+                {% if sub_categories %}
+                <div class="topbox_type1">
+                    <ul class="massmedia">
+                    {% for sub in sub_categories %}
+                        <li{% if (active_sid2 is none and sub.sid2 is none) or (active_sid2 == sub.sid2) %} class="on"{% endif %}>
+                            {% if sub.sid2 %}
+                            <a href="{{ nav_url_base }}?view={{ view_type }}&amp;sid2={{ sub.sid2 }}">{{ sub.name }}</a>
+                            {% else %}
+                            <a href="{{ nav_url_base }}?view={{ view_type }}">{{ sub.name }}</a>
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+                <div class="newsflash_header3">
+                    <div class="view_type">
+                        <a href="{{ nav_url_base }}?view=paper{{ nav_extra_params }}" class="{% if view_type == 'paper' %}newsp_on{% else %}newsp{% endif %} nclicks(fls.vtype)" title="신문에 게재된 기사만 보실 수 있습니다.">신문게재기사만</a><span class="bar">|</span>
+                        <a href="{{ nav_url_base }}?view=title{{ nav_extra_params }}" class="{% if view_type == 'title' %}tit_on{% else %}tit_off{% endif %} nclicks(fls.vtype)">제목형</a>
+                        <a href="{{ nav_url_base }}?view=summary{{ nav_extra_params }}" class="{% if view_type == 'summary' %}sum_on{% else %}sum_off{% endif %} nclicks(fls.vtype)">요약형</a>
+                        <a href="{{ nav_url_base }}?view=photo{{ nav_extra_params }}" class="{% if view_type == 'photo' %}photo_on{% else %}photo_off{% endif %} nclicks(fls.vtype)">포토만</a>
+                    </div>
+                </div>
+                {% else %}
+                {# ━━━ 속보 메인 헤더 ━━━ #}
+                <div class="list_header newsflash_header">
+                    <h3>전체</h3>
+                    <div class="view_type">
+                        <a href="/view?page=1&amp;view=paper" class="{% if view_type == 'paper' %}newsp_on{% else %}newsp{% endif %} nclicks(fls.vtype)" title="신문에 게재된 기사만 보실 수 있습니다.">신문게재기사만</a><span class="bar">|</span>
+                        <a href="/view?page=1&amp;view=title" class="{% if view_type == 'title' %}tit_on{% else %}tit_off{% endif %} nclicks(fls.vtype)">제목형</a>
+                        <a href="/view?page=1&amp;view=summary" class="{% if view_type == 'summary' %}sum_on{% else %}sum_off{% endif %} nclicks(fls.vtype)">요약형</a>
+                        <a href="/view?page=1&amp;view=photo" class="{% if view_type == 'photo' %}photo_on{% else %}photo_off{% endif %} nclicks(fls.vtype)">포토만</a>
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="list_body newsflash_body">
+                    {% if loading %}
+                    <!-- Phase 1 진행 중: 3초마다 자동 새로고침 -->
+                    <div style="padding:40px 0; text-align:center;">
+                      <p style="font-size:15px; color:#555; margin:0 0 8px;">🔄 뉴스를 불러오는 중입니다...</p>
+                      <p style="font-size:12px; color:#aaa; margin:0;">잠시만 기다려주세요. 곧 기사가 표시됩니다.</p>
+                    </div>
+                    <script>setTimeout(() => location.reload(), 3000);</script>
+                    {% else %}
+                    <!-- Phase 2 진행 중 배너 -->
+                    {% if enriching %}
+                    <div id="enriching-banner" style="
+                        display:flex; align-items:center; gap:8px;
+                        padding:7px 12px; margin-bottom:10px;
+                        background:#f0f8ff; border:1px solid #c8e0f7;
+                        border-radius:4px; font-size:12px; color:#0069c0;">
+                      <span style="animation:spin 1.2s linear infinite; display:inline-block;">🔄</span>
+                      <span>기사 본문을 백그라운드에서 수집하고 있습니다. 잠시 후 자동으로 업데이트됩니다.</span>
+                    </div>
+                    <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+                    {% endif %}
+                    {# ── 공통 AI 배지 매크로 ──────────────────────── #}
+                    {# 50 이상 → 가짜(빨간), 50 미만 → 진짜(초록)        #}
+                    {% macro ai_badge(s) %}
+                      {% if s is not none %}
+                        {% if s >= 50 %}
+                          <span class="ai_badge danger">가짜 {{ "%.0f"|format(s) }}%</span>
+                        {% else %}
+                          <span class="ai_badge safe">진짜</span>
+                        {% endif %}
+                      {% endif %}
+                    {% endmacro %}
+
+                    {# ━━━━━━━ 제목형 ━━━━━━━ #}
+                    {% if view_type == 'title' %}
+                    <ul class="type02">
+                    {% for article in news_list %}
+                    {% set s = article.fake_score %}
+                    <li{% if s is not none and s >= 50 %} class="is_danger"{% endif %}>
+                        <a href="{{ article.url }}" class="nclicks(fls.list)">{{ article.title }}</a>
+                        {{ ai_badge(s) }}
+                        <span class="writing">{{ article.press }}</span>
+                        <span class="date is_new">{{ article.time }}</span>
+                    </li>
+                    {% endfor %}
+                    </ul>
+
+                    {# ━━━━━━━ 요약형 / 신문게재기사만 (같은 레이아웃) ━━━━━━━ #}
+                    {% elif view_type == 'summary' or view_type == 'paper' %}
+                    {# 앞 10개: headline 스타일 (굵게) #}
+                    <ul class="type06_headline">
+                    {% for article in news_list[:10] %}
+                    {% set s = article.fake_score %}
+                    <li{% if s is not none and s >= 50 %} class="is_danger"{% endif %}>
+                        {% if article.image_url %}
+                        <a href="{{ article.url }}" class="thumb_area">
+                            <img src="{{ article.image_url }}" alt="{{ article.title }}"
+                                 onerror="this.src='https://ssl.pstatic.net/static.news/image/news/2009/noimage_106x72.png';">
+                        </a>
+                        {% endif %}
+                        <div class="text_area">
+                            <a href="{{ article.url }}" class="art_tit_h">{{ article.title }}</a>
+                            {{ ai_badge(s) }}
+                            {% if article.summary %}
+                            <span class="lede">{{ article.summary }}</span>
+                            {% endif %}
+                            <span class="type06_meta">
+                                <span class="writing">{{ article.press }}</span>
+                                <span class="date is_new">{{ article.time }}</span>
+                            </span>
+                        </div>
+                    </li>
+                    {% endfor %}
+                    </ul>
+                    {# 나머지: 일반 스타일 #}
+                    {% if news_list[10:] %}
+                    <ul class="type06">
+                    {% for article in news_list[10:] %}
+                    {% set s = article.fake_score %}
+                    <li{% if s is not none and s >= 50 %} class="is_danger"{% endif %}>
+                        {% if article.image_url %}
+                        <a href="{{ article.url }}" class="thumb_area">
+                            <img src="{{ article.image_url }}" alt="{{ article.title }}"
+                                 onerror="this.src='https://ssl.pstatic.net/static.news/image/news/2009/noimage_106x72.png';">
+                        </a>
+                        {% endif %}
+                        <div class="text_area">
+                            <a href="{{ article.url }}" class="art_tit_n">{{ article.title }}</a>
+                            {{ ai_badge(s) }}
+                            {% if article.summary %}
+                            <span class="lede">{{ article.summary }}</span>
+                            {% endif %}
+                            <span class="type06_meta">
+                                <span class="writing">{{ article.press }}</span>
+                                <span class="date is_new">{{ article.time }}</span>
+                            </span>
+                        </div>
+                    </li>
+                    {% endfor %}
+                    </ul>
+                    {% endif %}
+
+                    {# ━━━━━━━ 포토만 ━━━━━━━ #}
+                    {% elif view_type == 'photo' %}
+                    <ul class="photo_list">
+                    {% for row in news_list | batch(4, None) %}
+                    <li{% if loop.first %} class="fst"{% endif %}>
+                        <table cellpadding="0" cellspacing="0">
+                        <colgroup><col width="25%"><col width="25%"><col width="25%"><col width="25%"></colgroup>
+                        <tbody>
+                        <tr>
+                            {% for article in row %}
+                            <td>
+                            {% if article %}
+                                <a href="{{ article.url }}" class="nclicks(fls.list)">
+                                    <img src="{{ article.image_url or 'https://ssl.pstatic.net/static.news/image/news/2009/noimage_120.gif' }}"
+                                         alt="{{ article.title }}"
+                                         onerror="this.src='https://ssl.pstatic.net/static.news/image/news/2009/noimage_120.gif';">
+                                </a>
+                            {% endif %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        <tr class="tit">
+                            {% for article in row %}
+                            <td>
+                            {% if article %}
+                                <a href="{{ article.url }}" class="nclicks(fls.list)">{{ article.title }}</a>
+                            {% endif %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        </tbody>
+                        </table>
+                    </li>
+                    {% endfor %}
+                    </ul>
+                    {% endif %}
+                    <!-- Phase 2 완료 시 자동 polling으로 배너 제거 -->
+                    {% if enriching %}
+                    <script>
+                      (function poll() {
+                        {% if cache_key and cache_key != 'main' %}
+                        var statusUrl = '/api/section/status/{{ cache_key }}';
+                        {% else %}
+                        var statusUrl = '/api/status';
+                        {% endif %}
+                        fetch(statusUrl)
+                          .then(r => r.json())
+                          .then(d => {
+                            if (!d.enriching) {
+                              // 본문 수집 완료 → 페이지 새로고침
+                              location.reload();
+                            } else {
+                              setTimeout(poll, 8000);  // 8초마다 확인
+                            }
+                          })
+                          .catch(() => setTimeout(poll, 8000));
+                      })();
+                    </script>
+                    {% endif %}
+                    {% endif %}
+                </div>
+
+                <div class="paging">
+{# 8개씩 블록 페이지네이션 #}
+{% set block_size  = 8 %}
+{% set block_start = ((current_page - 1) // block_size) * block_size + 1 %}
+{% set block_end   = [block_start + block_size - 1, total_pages] | min %}
+{% set prev_block  = block_start - block_size %}
+{# 이전 블록 — 이전 블록의 첫 페이지로 이동 #}
+{% if block_start > 1 %}
+  <a href="{{ nav_url_base }}?page={{ prev_block }}&amp;view={{ view_type }}{{ nav_extra_params }}" class="prev nclicks(fls.page)">이전</a>
+{% endif %}
+{# 현재 블록의 페이지 번호 #}
+{% for p in range(block_start, block_end + 1) %}
+  {% if p == current_page %}
+    <strong>{{ p }}</strong>
+  {% else %}
+    <a href="{{ nav_url_base }}?page={{ p }}&amp;view={{ view_type }}{{ nav_extra_params }}" class="nclicks(fls.page)">{{ p }}</a>
+  {% endif %}
+{% endfor %}
+{# 다음 블록 — block_end + 1 이 total_pages 보다 작을 때만 표시 #}
+{% if block_end < total_pages %}
+  <a href="{{ nav_url_base }}?page={{ block_end + 1 }}&amp;view={{ view_type }}{{ nav_extra_params }}" class="next nclicks(fls.page)">다음</a>
+{% endif %}
+</div>
+
+<h4 class="blind">뉴스 이전날짜 더보기 링크모음</h4>
+<div class="pagenavi_day">
+<span class="viewday">{{ today }}</span></div>
+
+            </div>
+        </td>
+        <td class="aside">
+            <div class="aside">
+
+<div class="section _officeTopRanking1087479">
+    <h4>언론사별 가장 많이 본 뉴스</h4>
+    <div style="display:flex; align-items:center; gap:6px; margin-bottom:10px;">
+        <button type="button" class="section_info_icon nclicks('rig.renws2i') _rankingInfoButton">안내</button>
+        <span class="section_sub_txt" style="margin:0; font-size:11px; color:#999;">오전 10시~오전 11시까지 집계한 결과입니다.</span>
+    </div>
+    <div class="section_info_layer _rankingInfoLayer" style="display: none">각 언론사의 가장 많이 본 기사 1건을 제공합니다. <button type="button" class="section_info_layer_close _rankingInfoCloseButton nclicks('rig.renws2x')"><span>닫기</span></button></div>
+
+    <ul class="section_list_ranking_press _rankingList" id="_rankingList0" style="display: block">
+            <li>
+                <a href="https://n.news.naver.com/mnews/ranking/article/055/0001358574?ntype=RANKING&amp;sid=001" class="ranking_thumb nclicks('rig.renws2')" tabindex="-1" aria-hidden="true">
+                    <img src="https://mimgnews.pstatic.net/image/origin/055/2026/05/23/1358574.jpg?type=nf88_60" width="88" height="60" alt="" onerror="this.src='https://ssl.pstatic.net/static.news/image/news/errorimage/noimage_88x60.png';"><strong class="r_ico r_vod_small">동영상기사</strong>
+                </a>
+                <div class="list_text_wrap"><div class="list_text"><div class="list_text_inner">
+                    <a href="https://n.news.naver.com/mnews/ranking/article/055/0001358574?ntype=RANKING&amp;sid=001" class="list_tit nclicks('rig.renws2')">"치료 좀 해주세요" 줄줄이 퇴짜…피부과의 현실</a>
+                    <a class="list_press nclicks('rig.renws2pname')" target="_blank" href="https://news.naver.com/main/ranking/office.naver?officeId=055"><span class="list_press_thumb"><img src="https://mimgnews.pstatic.net/image/upload/office_logo/055/2025/03/26/logo_055_100_20250326142328.png" width="16" height="16" alt=""></span>SBS</a>
+                </div></div></div>
+            </li>
+            <li>
+                <a href="https://n.news.naver.com/mnews/ranking/article/214/0001500790?ntype=RANKING&amp;sid=001" class="ranking_thumb nclicks('rig.renws2')" tabindex="-1" aria-hidden="true">
+                    <img src="https://mimgnews.pstatic.net/image/origin/214/2026/05/22/1500790.jpg?type=nf88_60" width="88" height="60" alt="" onerror="this.src='https://ssl.pstatic.net/static.news/image/news/errorimage/noimage_88x60.png';"><strong class="r_ico r_vod_small">동영상기사</strong>
+                </a>
+                <div class="list_text_wrap"><div class="list_text"><div class="list_text_inner">
+                    <a href="https://n.news.naver.com/mnews/ranking/article/214/0001500790?ntype=RANKING&amp;sid=001" class="list_tit nclicks('rig.renws2')">마케팅 담당자 "고의성 없었다"‥파트너들은 "생계 타격 …</a>
+                    <a class="list_press nclicks('rig.renws2pname')" target="_blank" href="https://news.naver.com/main/ranking/office.naver?officeId=214"><span class="list_press_thumb"><img src="https://mimgnews.pstatic.net/image/upload/office_logo/214/2025/03/07/logo_214_100_20250307145647.png" width="16" height="16" alt=""></span>MBC</a>
+                </div></div></div>
+            </li>
+            <li>
+                <a href="https://n.news.naver.com/mnews/ranking/article/469/0000932306?ntype=RANKING&amp;sid=001" class="ranking_thumb nclicks('rig.renws2')" tabindex="-1" aria-hidden="true">
+                    <img src="https://mimgnews.pstatic.net/image/origin/469/2026/05/23/932306.jpg?type=nf88_60" width="88" height="60" alt="" onerror="this.src='https://ssl.pstatic.net/static.news/image/news/errorimage/noimage_88x60.png';">
+                </a>
+                <div class="list_text_wrap"><div class="list_text"><div class="list_text_inner">
+                    <a href="https://n.news.naver.com/mnews/ranking/article/469/0000932306?ntype=RANKING&amp;sid=001" class="list_tit nclicks('rig.renws2')">쿠팡이츠 '누구나 무료 배달'... 자영업자 "추후 청구서 …</a>
+                    <a class="list_press nclicks('rig.renws2pname')" target="_blank" href="https://news.naver.com/main/ranking/office.naver?officeId=469"><span class="list_press_thumb"><img src="https://mimgnews.pstatic.net/image/upload/office_logo/469/2025/03/07/logo_469_100_20250307145719.png" width="16" height="16" alt=""></span>한국일보</a>
+                </div></div></div>
+            </li>
+            <li>
+                <a href="https://n.news.naver.com/mnews/ranking/article/660/0000109896?ntype=RANKING&amp;sid=001" class="ranking_thumb nclicks('rig.renws2')" tabindex="-1" aria-hidden="true">
+                    <img src="https://mimgnews.pstatic.net/image/origin/660/2026/05/23/109896.jpg?type=nf88_60" width="88" height="60" alt="" onerror="this.src='https://ssl.pstatic.net/static.news/image/news/errorimage/noimage_88x60.png';"><strong class="r_ico r_vod_small">동영상기사</strong>
+                </a>
+                <div class="list_text_wrap"><div class="list_text"><div class="list_text_inner">
+                    <a href="https://n.news.naver.com/mnews/ranking/article/660/0000109896?ntype=RANKING&amp;sid=001" class="list_tit nclicks('rig.renws2')">김재원 "'외박 주폭' 정원오, 인간됨됨이 오세훈에 안 돼 …</a>
+                    <a class="list_press nclicks('rig.renws2pname')" target="_blank" href="https://news.naver.com/main/ranking/office.naver?officeId=660"><span class="list_press_thumb"><img src="https://mimgnews.pstatic.net/image/upload/office_logo/660/2025/03/07/logo_660_100_20250307145705.png" width="16" height="16" alt=""></span>kbc광주방송</a>
+                </div></div></div>
+            </li>
+            <li>
+                <a href="https://n.news.naver.com/mnews/ranking/article/366/0001166654?ntype=RANKING&amp;sid=001" class="ranking_thumb nclicks('rig.renws2')" tabindex="-1" aria-hidden="true">
+                    <img src="https://mimgnews.pstatic.net/image/origin/366/2026/05/23/1166654.jpg?type=nf88_60" width="88" height="60" alt="" onerror="this.src='https://ssl.pstatic.net/static.news/image/news/errorimage/noimage_88x60.png';"><strong class="r_ico r_vod_small">동영상기사</strong>
+                </a>
+                <div class="list_text_wrap"><div class="list_text"><div class="list_text_inner">
+                    <a href="https://n.news.naver.com/mnews/ranking/article/366/0001166654?ntype=RANKING&amp;sid=001" class="list_tit nclicks('rig.renws2')">[르포] "오해하시면 안 돼요"… 공무원 발길 끊긴 '스타 …</a>
+                    <a class="list_press nclicks('rig.renws2pname')" target="_blank" href="https://news.naver.com/main/ranking/office.naver?officeId=366"><span class="list_press_thumb"><img src="https://mimgnews.pstatic.net/image/upload/office_logo/366/2025/03/07/logo_366_100_20250307145615.png" width="16" height="16" alt=""></span>조선비즈</a>
+                </div></div></div>
+            </li>
+    </ul>
+    <ul class="section_list_ranking_press _rankingList" id="_rankingList5" style="display: none">
+            <li><a href="https://n.news.naver.com/mnews/ranking/article/437/0000492549?ntype=RANKING&amp;sid=001" class="ranking_thumb nclicks('rig.renws2')" tabindex="-1" aria-hidden="true"><img src="https://mimgnews.pstatic.net/image/origin/437/2026/05/22/492549.jpg?type=nf88_60" width="88" height="60" alt="" onerror="this.src='https://ssl.pstatic.net/static.news/image/news/errorimage/noimage_88x60.png';"></a><div class="list_text_wrap"><div class="list_text"><div class="list_text_inner"><a href="https://n.news.naver.com/mnews/ranking/article/437/0000492549?ntype=RANKING&amp;sid=001" class="list_tit nclicks('rig.renws2')">조갑제 "스타벅스 불매, 나치 독일 유대인 상점 불매운동 …</a><a class="list_press" target="_blank" href="https://news.naver.com/main/ranking/office.naver?officeId=437"><span class="list_press_thumb"><img src="https://mimgnews.pstatic.net/image/upload/office_logo/437/2026/03/05/logo_437_100_20260305143306.png" width="16" height="16" alt=""></span>JTBC</a></div></div></div></li>
+            <li><a href="https://n.news.naver.com/mnews/ranking/article/005/0001850556?ntype=RANKING&amp;sid=001" class="ranking_thumb" tabindex="-1" aria-hidden="true"><img src="https://mimgnews.pstatic.net/image/origin/005/2026/05/22/1850556.jpg?type=nf88_60" width="88" height="60" alt="" onerror="this.src='https://ssl.pstatic.net/static.news/image/news/errorimage/noimage_88x60.png';"></a><div class="list_text_wrap"><div class="list_text"><div class="list_text_inner"><a href="https://n.news.naver.com/mnews/ranking/article/005/0001850556?ntype=RANKING&amp;sid=001" class="list_tit">'탱크데이' 논란…법무부, 대검에 "스타벅스 구매 보고하라 …</a><a class="list_press" target="_blank" href="https://news.naver.com/main/ranking/office.naver?officeId=005"><span class="list_press_thumb"><img src="https://mimgnews.pstatic.net/image/upload/office_logo/005/2025/03/07/logo_005_100_20250307145616.png" width="16" height="16" alt=""></span>국민일보</a></div></div></div></li>
+            <li><a href="https://n.news.naver.com/mnews/ranking/article/011/0004623852?ntype=RANKING&amp;sid=001" class="ranking_thumb" tabindex="-1" aria-hidden="true"><img src="https://mimgnews.pstatic.net/image/origin/011/2026/05/23/4623852.jpg?type=nf88_60" width="88" height="60" alt="" onerror="this.src='https://ssl.pstatic.net/static.news/image/news/errorimage/noimage_88x60.png';"></a><div class="list_text_wrap"><div class="list_text"><div class="list_text_inner"><a href="https://n.news.naver.com/mnews/ranking/article/011/0004623852?ntype=RANKING&amp;sid=001" class="list_tit">"출발은 좋았는데"…삼전, '30만전자' 찍고 반락 후 숨 …</a><a class="list_press" target="_blank" href="https://news.naver.com/main/ranking/office.naver?officeId=011"><span class="list_press_thumb"><img src="https://mimgnews.pstatic.net/image/upload/office_logo/011/2025/03/07/logo_011_100_20250307145637.png" width="16" height="16" alt=""></span>서울경제</a></div></div></div></li>
+            <li><a href="https://n.news.naver.com/mnews/ranking/article/052/0002356955?ntype=RANKING&amp;sid=001" class="ranking_thumb" tabindex="-1" aria-hidden="true"><img src="https://mimgnews.pstatic.net/image/origin/052/2026/05/23/2356955.jpg?type=nf88_60" width="88" height="60" alt="" onerror="this.src='https://ssl.pstatic.net/static.news/image/news/errorimage/noimage_88x60.png';"></a><div class="list_text_wrap"><div class="list_text"><div class="list_text_inner"><a href="https://n.news.naver.com/mnews/ranking/article/052/0002356955?ntype=RANKING&amp;sid=001" class="list_tit">삼성전자 노사 합의안 투표 이틀째...첫날 투표율 66%↑</a><a class="list_press" target="_blank" href="https://news.naver.com/main/ranking/office.naver?officeId=052"><span class="list_press_thumb"><img src="https://mimgnews.pstatic.net/image/upload/office_logo/052/2025/03/07/logo_052_100_20250307145633.png" width="16" height="16" alt=""></span>YTN</a></div></div></div></li>
+            <li><a href="https://n.news.naver.com/mnews/ranking/article/586/0000129831?ntype=RANKING&amp;sid=001" class="ranking_thumb" tabindex="-1" aria-hidden="true"><img src="https://mimgnews.pstatic.net/image/origin/586/2026/05/23/129831.jpg?type=nf88_60" width="88" height="60" alt="" onerror="this.src='https://ssl.pstatic.net/static.news/image/news/errorimage/noimage_88x60.png';"></a><div class="list_text_wrap"><div class="list_text"><div class="list_text_inner"><a href="https://n.news.naver.com/mnews/ranking/article/586/0000129831?ntype=RANKING&amp;sid=001" class="list_tit">11년 만에 드러난 두 아기의 죽음, '엄마'에게 …</a><a class="list_press" target="_blank" href="https://news.naver.com/main/ranking/office.naver?officeId=586"><span class="list_press_thumb"><img src="https://mimgnews.pstatic.net/image/upload/office_logo/586/2025/03/07/logo_586_100_20250307145713.png" width="16" height="16" alt=""></span>시사저널</a></div></div></div></li>
+    </ul>
+    <ul class="section_list_ranking_press _rankingList" id="_rankingList10" style="display: none">
+            <li><a href="https://n.news.naver.com/mnews/ranking/article/025/0003525270?ntype=RANKING&amp;sid=001" class="ranking_thumb" tabindex="-1" aria-hidden="true"><img src="https://mimgnews.pstatic.net/image/origin/025/2026/05/23/3525270.jpg?type=nf88_60" width="88" height="60" alt="" onerror="this.src='https://ssl.pstatic.net/static.news/image/news/errorimage/noimage_88x60.png';"></a><div class="list_text_wrap"><div class="list_text"><div class="list_text_inner"><a href="https://n.news.naver.com/mnews/ranking/article/025/0003525270?ntype=RANKING&amp;sid=001" class="list_tit">"뭐하자는 겁니까!" 노동장관, 삼전 노사 협상 중 버럭한 …</a><a class="list_press" target="_blank" href="https://news.naver.com/main/ranking/office.naver?officeId=025"><span class="list_press_thumb"><img src="https://mimgnews.pstatic.net/image/upload/office_logo/025/2025/03/07/logo_025_100_20250307145712.png" width="16" height="16" alt=""></span>중앙일보</a></div></div></div></li>
+            <li><a href="https://n.news.naver.com/mnews/ranking/article/015/0005290408?ntype=RANKING&amp;sid=001" class="ranking_thumb" tabindex="-1" aria-hidden="true"><img src="https://mimgnews.pstatic.net/image/origin/015/2026/05/23/5290408.jpg?type=nf88_60" width="88" height="60" alt="" onerror="this.src='https://ssl.pstatic.net/static.news/image/news/errorimage/noimage_88x60.png';"></a><div class="list_text_wrap"><div class="list_text"><div class="list_text_inner"><a href="https://n.news.naver.com/mnews/ranking/article/015/0005290408?ntype=RANKING&amp;sid=001" class="list_tit">자식 14명 키운 '평생 무주택자'…월세 내다가 파산한 비 …</a><a class="list_press" target="_blank" href="https://news.naver.com/main/ranking/office.naver?officeId=015"><span class="list_press_thumb"><img src="https://mimgnews.pstatic.net/image/upload/office_logo/015/2025/03/07/logo_015_100_20250307145644.png" width="16" height="16" alt=""></span>한국경제</a></div></div></div></li>
+            <li><a href="https://n.news.naver.com/mnews/ranking/article/032/0003447509?ntype=RANKING&amp;sid=001" class="ranking_thumb" tabindex="-1" aria-hidden="true"><img src="https://mimgnews.pstatic.net/image/origin/032/2026/05/23/3447509.jpg?type=nf88_60" width="88" height="60" alt="" onerror="this.src='https://ssl.pstatic.net/static.news/image/news/errorimage/noimage_88x60.png';"></a><div class="list_text_wrap"><div class="list_text"><div class="list_text_inner"><a href="https://n.news.naver.com/mnews/ranking/article/032/0003447509?ntype=RANKING&amp;sid=001" class="list_tit">강남 정신과 의사 "강남 환자 99.9%가 아무도 못 믿어 …</a><a class="list_press" target="_blank" href="https://news.naver.com/main/ranking/office.naver?officeId=032"><span class="list_press_thumb"><img src="https://mimgnews.pstatic.net/image/upload/office_logo/032/2025/03/07/logo_032_100_20250307145554.png" width="16" height="16" alt=""></span>경향신문</a></div></div></div></li>
+            <li><a href="https://n.news.naver.com/mnews/ranking/article/022/0004130142?ntype=RANKING&amp;sid=001" class="ranking_thumb" tabindex="-1" aria-hidden="true"><img src="https://mimgnews.pstatic.net/image/origin/022/2026/05/23/4130142.jpg?type=nf88_60" width="88" height="60" alt="" onerror="this.src='https://ssl.pstatic.net/static.news/image/news/errorimage/noimage_88x60.png';"></a><div class="list_text_wrap"><div class="list_text"><div class="list_text_inner"><a href="https://n.news.naver.com/mnews/ranking/article/022/0004130142?ntype=RANKING&amp;sid=001" class="list_tit">"참외 반 개 먹었는데?"…신장 약하면 '칼륨 부담' 커질 …</a><a class="list_press" target="_blank" href="https://news.naver.com/main/ranking/office.naver?officeId=022"><span class="list_press_thumb"><img src="https://mimgnews.pstatic.net/image/upload/office_logo/022/2025/03/20/logo_022_100_20250320162643.png" width="16" height="16" alt=""></span>세계일보</a></div></div></div></li>
+            <li><a href="https://n.news.naver.com/mnews/ranking/article/020/0003721722?ntype=RANKING&amp;sid=001" class="ranking_thumb" tabindex="-1" aria-hidden="true"><img src="https://mimgnews.pstatic.net/image/origin/020/2026/05/22/3721722.jpg?type=nf88_60" width="88" height="60" alt="" onerror="this.src='https://ssl.pstatic.net/static.news/image/news/errorimage/noimage_88x60.png';"></a><div class="list_text_wrap"><div class="list_text"><div class="list_text_inner"><a href="https://n.news.naver.com/mnews/ranking/article/020/0003721722?ntype=RANKING&amp;sid=001" class="list_tit">'스벅 인증샷' 뮤지컬 배우, 작품 하차…제작사 "심려 끼 …</a><a class="list_press" target="_blank" href="https://news.naver.com/main/ranking/office.naver?officeId=020"><span class="list_press_thumb"><img src="https://mimgnews.pstatic.net/image/upload/office_logo/020/2025/03/07/logo_020_100_20250307145700.png" width="16" height="16" alt=""></span>동아일보</a></div></div></div></li>
+    </ul>
+    <ul class="section_list_ranking_press _rankingList" id="_rankingList15" style="display: none">
+            <li><a href="https://n.news.naver.com/mnews/ranking/article/057/0001950414?ntype=RANKING&amp;sid=001" class="ranking_thumb" tabindex="-1" aria-hidden="true"><img src="https://mimgnews.pstatic.net/image/origin/057/2026/05/22/1950414.jpg?type=nf88_60" width="88" height="60" alt="" onerror="this.src='https://ssl.pstatic.net/static.news/image/news/errorimage/noimage_88x60.png';"></a><div class="list_text_wrap"><div class="list_text"><div class="list_text_inner"><a href="https://n.news.naver.com/mnews/ranking/article/057/0001950414?ntype=RANKING&amp;sid=001" class="list_tit">경찰 "김새론 목소리는 AI 조작"…김수현 '미성년 교제 …</a><a class="list_press" target="_blank" href="https://news.naver.com/main/ranking/office.naver?officeId=057"><span class="list_press_thumb"><img src="https://mimgnews.pstatic.net/image/upload/office_logo/057/2025/06/27/logo_057_100_20250627104110.png" width="16" height="16" alt=""></span>MBN</a></div></div></div></li>
+            <li><a href="https://n.news.naver.com/mnews/ranking/article/215/0001253099?ntype=RANKING&amp;sid=001" class="ranking_thumb" tabindex="-1" aria-hidden="true"><img src="https://mimgnews.pstatic.net/image/origin/215/2026/05/22/1253099.jpg?type=nf88_60" width="88" height="60" alt="" onerror="this.src='https://ssl.pstatic.net/static.news/image/news/errorimage/noimage_88x60.png';"></a><div class="list_text_wrap"><div class="list_text"><div class="list_text_inner"><a href="https://n.news.naver.com/mnews/ranking/article/215/0001253099?ntype=RANKING&amp;sid=001" class="list_tit">'한두 번이 아니었네'…회사차로 버스전용차로 '쌩쌩', 결 …</a><a class="list_press" target="_blank" href="https://news.naver.com/main/ranking/office.naver?officeId=215"><span class="list_press_thumb"><img src="https://mimgnews.pstatic.net/image/upload/office_logo/215/2025/03/07/logo_215_100_20250307145651.png" width="16" height="16" alt=""></span>한국경제TV</a></div></div></div></li>
+            <li><a href="https://n.news.naver.com/mnews/ranking/article/056/0012186855?ntype=RANKING&amp;sid=001" class="ranking_thumb" tabindex="-1" aria-hidden="true"><img src="https://mimgnews.pstatic.net/image/origin/056/2026/05/23/12186855.jpg?type=nf88_60" width="88" height="60" alt="" onerror="this.src='https://ssl.pstatic.net/static.news/image/news/errorimage/noimage_88x60.png';"></a><div class="list_text_wrap"><div class="list_text"><div class="list_text_inner"><a href="https://n.news.naver.com/mnews/ranking/article/056/0012186855?ntype=RANKING&amp;sid=001" class="list_tit">삼전·닉스의 진짜 질문, '공돌이 부자' 허할 것인가</a><a class="list_press" target="_blank" href="https://news.naver.com/main/ranking/office.naver?officeId=056"><span class="list_press_thumb"><img src="https://mimgnews.pstatic.net/image/upload/office_logo/056/2025/03/07/logo_056_100_20250307145641.png" width="16" height="16" alt=""></span>KBS</a></div></div></div></li>
+            <li><a href="https://n.news.naver.com/mnews/ranking/article/029/0003028117?ntype=RANKING&amp;sid=001" class="ranking_thumb" tabindex="-1" aria-hidden="true"><img src="https://mimgnews.pstatic.net/image/origin/029/2026/05/22/3028117.jpg?type=nf88_60" width="88" height="60" alt="" onerror="this.src='https://ssl.pstatic.net/static.news/image/news/errorimage/noimage_88x60.png';"></a><div class="list_text_wrap"><div class="list_text"><div class="list_text_inner"><a href="https://n.news.naver.com/mnews/ranking/article/029/0003028117?ntype=RANKING&amp;sid=001" class="list_tit">유승준 "한국 오고싶다"…법무부, 병역면탈자 입국금지 법적 …</a><a class="list_press" target="_blank" href="https://news.naver.com/main/ranking/office.naver?officeId=029"><span class="list_press_thumb"><img src="https://mimgnews.pstatic.net/image/upload/office_logo/029/2025/04/14/logo_029_100_20250414154305.png" width="16" height="16" alt=""></span>디지털타임스</a></div></div></div></li>
+            <li><a href="https://n.news.naver.com/mnews/ranking/article/001/0016095001?ntype=RANKING&amp;sid=001" class="ranking_thumb" tabindex="-1" aria-hidden="true"><img src="https://mimgnews.pstatic.net/image/origin/001/2026/05/23/16095001.jpg?type=nf88_60" width="88" height="60" alt="" onerror="this.src='https://ssl.pstatic.net/static.news/image/news/errorimage/noimage_88x60.png';"></a><div class="list_text_wrap"><div class="list_text"><div class="list_text_inner"><a href="https://n.news.naver.com/mnews/ranking/article/001/0016095001?ntype=RANKING&amp;sid=001" class="list_tit">[샷!] 완벽한 금수저 가족의 투자 사기</a><a class="list_press" target="_blank" href="https://news.naver.com/main/ranking/office.naver?officeId=001"><span class="list_press_thumb"><img src="https://mimgnews.pstatic.net/image/upload/office_logo/001/2025/03/07/logo_001_100_20250307145612.png" width="16" height="16" alt=""></span>연합뉴스</a></div></div></div></li>
+    </ul>
+    <button type="button" class="refresh_button nclicks('rig.renws2new') _refreshButton">더보기</button>
+</div>
+<script>
+/* 언론사별 랭킹 더보기 — 순수 JS (jindo 대체) */
+(function () {
+    window.addEventListener('load', function () {
+        var base = document.querySelector('._officeTopRanking1087479');
+        if (!base) return;
+        var lists   = base.querySelectorAll('._rankingList');
+        var btn     = base.querySelector('._refreshButton');
+        var current = 0;
+        if (btn && lists.length > 1) {
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                lists[current].style.display = 'none';
+                current = (current + 1) % lists.length;
+                lists[current].style.display = 'block';
+            });
+        }
+    });
+})();
+</script>
+
+<div class="section" style="margin-bottom:20px; white-space:nowrap;" id="right_dailyList">
+    <h4>분야별 주요뉴스</h4>
+    <div class="classfy sd" style="display:block">
+        <ul class="list_txt">
+            <li><a href="https://n.news.naver.com/mnews/article/055/0001358453?sid=102" class="nclicks(rig.secteco)">'탱크데이' 논란에 '백골단' 그 의원 나섰다[자막뉴스]</a></li>
+            <li><a href="https://n.news.naver.com/mnews/article/022/0004129993?sid=100" class="nclicks(rig.secteco)">곽상언 "지금 정치, 모두 '나'를 위해서 해" ① [더 깊숙한 인터뷰]</a></li>
+            <li><a href="https://n.news.naver.com/mnews/article/422/0000867533?sid=100" class="nclicks(rig.secteco)">대구 최대 현안 '경제 살리기'…"내가 적임자" 격돌</a></li>
+            <li><a href="https://n.news.naver.com/mnews/article/032/0003447382?sid=104" class="nclicks(rig.secteco)">이란 매체 "미·이란, 메시지 교환 중"···농축 우라늄 문제는 여전히 쟁점</a></li>
+            <li><a href="https://n.news.naver.com/mnews/article/014/0005525465?sid=101" class="nclicks(rig.secteco)">다우지수, 이틀 연속 사상 최고…암 홀딩스, 주간 47% 폭등[뉴욕증시]</a></li>
+        </ul>
+        <ul class="list_txt">
+            <li><a href="https://n.news.naver.com/mnews/article/081/0003646266?sid=101" class="nclicks(rig.secteco)">스타벅스 불매 일파만파…무신사는 박종철센터 찾아 다시 사과</a></li>
+            <li><a href="https://n.news.naver.com/mnews/article/018/0006287933?sid=101" class="nclicks(rig.secteco)">소비자단체 "스타벅스의 진정한 사과는 '조건없는' 환불"</a></li>
+            <li><a href="https://n.news.naver.com/mnews/article/008/0005361745?sid=102" class="nclicks(rig.secteco)">'탱크데이' 정용진 수사 빨라졌다...재배당 하루만 고발인 조사</a></li>
+            <li><a href="https://n.news.naver.com/mnews/article/018/0006287594?sid=105" class="nclicks(rig.secteco)">아이진, 한타바이러스 백신 과제 선정에 '上'…녹십자MS 들썩</a></li>
+            <li><a href="https://n.news.naver.com/mnews/article/092/0002423967?sid=105" class="nclicks(rig.secteco)">낙하 96회·버튼 1만번...샥즈가 품질을 증명하는 법</a></li>
+        </ul>
+    </div>
+</div>
+
+<!-- ── AI 가짜뉴스 탐지 통계 ── -->
+<div class="ai_stat_box">
+    <h4>🤖 AI 가짜뉴스 탐지 현황</h4>
+    <div class="ai_stat_row">
+        <span>전체 기사</span><strong>{{ all_articles | length }}건</strong>
+    </div>
+    {% if all_articles | selectattr('fake_score', 'ne', none) | list | length > 0 %}
+        {% set fake_cnt = all_articles | selectattr('fake_score', 'ne', none) | selectattr('fake_score', 'ge', 50) | list | length %}
+        {% set real_cnt = all_articles | selectattr('fake_score', 'ne', none) | selectattr('fake_score', 'lt', 50) | list | length %}
+        <div class="ai_stat_row">
+            <span><span class="ai_badge safe">진짜</span> 정상 기사</span><strong>{{ real_cnt }}건</strong>
+        </div>
+        <div class="ai_stat_row">
+            <span><span class="ai_badge danger">가짜</span> 가짜뉴스 의심</span><strong>{{ fake_cnt }}건</strong>
+        </div>
+    {% else %}
+        <div class="ai_stat_note">탐지 결과를 불러오는 중입니다.</div>
+    {% endif %}
+    <div class="ai_stat_note">
+    </div>
+</div>
+
+            </div>
+        </td>
+    </tr></tbody>
+</table>
+</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━ 푸터 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<footer style="background:#f9f9f9; border-top:1px solid #e5e5e5; padding:20px 0; margin-top:20px;">
+  <div style="max-width:1100px; margin:0 auto; padding:0 15px; text-align:center; font-size:11px; color:#999;">
+    <p style="margin:0 0 6px;">
+      <span style="color:#777; margin:0 8px;">뉴스홈</span>
+      <span>|</span>
+      <span style="color:#777; margin:0 8px;">뉴스 고객센터</span>
+      <span>|</span>
+      <span style="color:#777; margin:0 8px;">API</span>
+    </p>
+    <p style="margin:0;">Copyright © NAVER Corp. All Rights Reserved. &nbsp;|&nbsp; AI 가짜뉴스 탐지 시스템 (AI Fake News Detection)</p>
+  </div>
+</footer>
+
+{% if loading %}
+<script>
+  /* 크롤링이 끝나면 자동 새로고침 (5초 간격) */
+  setTimeout(function(){ location.reload(); }, 5000);
+</script>
+{% endif %}
+
+<script>
+/* ── 모델 선택 드롭다운 ── */
+(function () {
+  var wrap  = document.getElementById('modelSelectWrap');
+  var btn   = document.getElementById('modelSelectBtn');
+  var menu  = document.getElementById('modelSelectMenu');
+  var label = document.getElementById('modelSelectLabel');
+  if (!btn || !menu) return;
+
+  /* 모델 이름 매핑 */
+  var MODEL_NAMES = {
+    logistic: '로지스틱 회귀 모델',
+    svm:      'SVM 모델',
+    xgboost:  'XGBoost 모델'
+  };
+
+  /* 현재 URL 파라미터에서 선택된 모델 읽기 */
+  var params       = new URLSearchParams(window.location.search);
+  var currentModel = params.get('model');
+
+  if (currentModel && MODEL_NAMES[currentModel]) {
+    label.textContent = MODEL_NAMES[currentModel];
+  }
+
+  /* 활성 항목 표시 */
+  menu.querySelectorAll('.model_select_item').forEach(function (item) {
+    if (item.getAttribute('data-model') === currentModel) {
+      item.classList.add('is_active');
+    }
+  });
+
+  /* 버튼 클릭 → 열기/닫기 */
+  btn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    var open = menu.classList.contains('is_open');
+    menu.classList.toggle('is_open', !open);
+    btn.classList.toggle('is_open', !open);
+  });
+
+  /* 메뉴 항목 클릭 → URL 파라미터 변경 후 이동 */
+  menu.querySelectorAll('.model_select_item').forEach(function (item) {
+    item.addEventListener('click', function (e) {
+      e.preventDefault();
+      var model = this.getAttribute('data-model');
+      var url   = new URL(window.location.href);
+      url.searchParams.set('model', model);
+      window.location.href = url.toString();
+    });
+  });
+
+  /* 외부 클릭 시 닫기 */
+  document.addEventListener('click', function () {
+    menu.classList.remove('is_open');
+    btn.classList.remove('is_open');
+  });
+
+  /* 메뉴 내부 클릭이 외부 클릭 이벤트로 버블링되지 않도록 */
+  wrap.addEventListener('click', function (e) { e.stopPropagation(); });
+})();
+</script>
+
+</body>
+</html>

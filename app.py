@@ -8,12 +8,16 @@ import os
 import time
 import asyncio
 import json
+import ssl
+import urllib.request
 from datetime import datetime
+from bs4 import BeautifulSoup
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import pandas as pd
 import uvicorn
 from contextlib import asynccontextmanager
+import re
 from fastapi import FastAPI, Request, Query
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -27,8 +31,6 @@ _RESULT_CSV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                  'data', 'realtime_news_result.csv')
 
 def _load_result_articles() -> list[dict]:
-    """realtime_news_result.csv를 읽어 naver_news_clone.html 호환 딕셔너리 리스트로 반환.
-    predicted_label 오름차순(0=진짜 → 1=가짜)으로 정렬해서 반환한다."""
     try:
         df = pd.read_csv(_RESULT_CSV_PATH, encoding='utf-8-sig')
     except FileNotFoundError:
@@ -40,14 +42,13 @@ def _load_result_articles() -> list[dict]:
         label = int(row.get('predicted_label', 0) or 0)
         img   = str(row.get('image_url', ''))
         records.append({
-            # ── 클론 템플릿이 그대로 사용하는 필드 ──────────────────
             'title':           str(row.get('title', '')),
             'url':             str(row.get('url', '#')),
             'press':           str(row.get('media', '')),
             'time':            str(row.get('pub_time', row.get('date', ''))),
             'image_url':       img if img else None,
             'summary':         str(row.get('summary', '')) if pd.notna(row.get('summary')) else '',
-            'fake_score':      prob,          # ai_badge 매크로가 fake_score 기준으로 동작
+            'fake_score':      prob,         
             'body_ready':      True,
             # ── 결과 페이지 전용 ─────────────────────────────────────
             'predicted_label': label,         # 0=진짜, 1=가짜  ← 구분·정렬 기준
@@ -151,9 +152,13 @@ _cache: dict = {
     'articles':   [],
     'fetched_at': 0,
     'enriching':  False,
+    'aside_html': '',      # 실제 네이버 aside HTML (광고 제거 후)
+    'aside_at':   0,       # aside 마지막 갱신 시각
 }
-CACHE_TTL  = 300          # 5분
-PAGE_SIZE  = 30           # 한 페이지에 보여줄 기사 수
+CACHE_TTL       = 300   # 5분
+PAGE_SIZE       = 30    # 메인/섹션 페이지당 기사 수
+VIEW_PAGE_SIZE  = 10    # 우측 패널(/view, /rview) 페이지당 기사 수
+VIEW_PAGE_GROUP = 8     # 페이지 네비게이션 한 번에 표시할 페이지 수
 CACHE_DIR  = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'cache')
 _crawl_in_progress = False
 
@@ -330,7 +335,7 @@ async def _run_section_crawl(cache_key: str, base_url: str):
         await enrich_bodies(raw)  
         cache['fetched_at'] = time.time()
         cache['enriching']  = False
-        _save_cache_to_disk(cache_key, cache['articles'])   #  디스크 저장
+        _save_cache_to_disk(cache_key, cache['articles'])   
         print(f'[app] [{cache_key}] Phase 2 완료')
     except Exception as e:
         print(f'[app] [{cache_key}] Phase 2 실패: {e}')
@@ -346,7 +351,7 @@ async def _staggered_warmup():
         if cache_key not in _section_crawling:
             print(f'[app] 사전 워밍 시작: [{cache_key}]')
             asyncio.create_task(_run_section_crawl(cache_key, base_url))
-        await asyncio.sleep(0.2)  # 49개 등록 시간 
+        await asyncio.sleep(0.2)  
 
 
 async def _refresh_loop():
@@ -372,7 +377,7 @@ async def _refresh_loop():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print('[app] 서버 시작 — 디스크 캐시 선 로드 중...')
-    _load_all_disk_caches()                              #  저장된 캐시 즉시 제공
+    _load_all_disk_caches()                            
     print('[app] 속보(메인) + 전체 섹션 사전 크롤링 시작...')
     asyncio.create_task(_run_crawl())
     warmup_task  = asyncio.create_task(_staggered_warmup())
@@ -585,7 +590,7 @@ async def result_page(
 
     return templates.TemplateResponse(
         request=request,
-        name='naver_news_result.html',
+        name='naver_news_clone.html',
         context={
             'news_list':       page_articles,
             'all_articles':    all_articles,
@@ -607,6 +612,338 @@ async def result_page(
             'fake_count':      fake_count,
         },
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 라우트 — 우측 패널 전용 기사 목록 뷰 (스플릿 화면 재귀 방지)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.get('/view', response_class=HTMLResponse)
+async def view_page(
+    request: Request,
+    page: int = Query(default=1, ge=1),
+    view: str = Query(default='title'),
+):
+    """우측 패널 전용: AI 탐지 결과 기사 목록 (네이버 클론 CSS 적용)."""
+    if view not in VALID_VIEWS:
+        view = 'title'
+
+    all_articles = _load_result_articles()
+    real_count   = sum(1 for a in all_articles if a['predicted_label'] == 0)
+    fake_count   = sum(1 for a in all_articles if a['predicted_label'] == 1)
+
+    total_pages  = max(1, (len(all_articles) + VIEW_PAGE_SIZE - 1) // VIEW_PAGE_SIZE)
+    current_page = min(page, total_pages)
+    start        = (current_page - 1) * VIEW_PAGE_SIZE
+    page_articles = all_articles[start: start + VIEW_PAGE_SIZE]
+
+    return templates.TemplateResponse(
+        request=request,
+        name='naver_news_right.html',
+        context={
+            'news_list':        page_articles,
+            'all_articles':     all_articles,
+            'show_badges':      True,
+            'real_count':       real_count,
+            'fake_count':       fake_count,
+            'total_count':      len(all_articles),
+            'today':            _today_str(),
+            'section_name':     '전체',
+            'section_id':       None,
+            'sub_categories':   [],
+            'active_sid2':      None,
+            'enriching':        False,
+            'cache_key':        'result',
+            'view_type':        view,
+            'current_page':     current_page,
+            'total_pages':      total_pages,
+            'nav_url_base':     '/view',
+            'nav_extra_params': '',
+        },
+    )
+
+
+@app.get('/rview/section/{sid1}', response_class=HTMLResponse)
+async def rview_section(
+    request: Request,
+    sid1: str,
+    page: int = Query(default=1, ge=1),
+    view: str = Query(default='title'),
+    sid2: str = Query(default=None),
+):
+    """우측 패널 전용: 카테고리 섹션 기사 목록 (AI 배지 없음, 재귀 방지)."""
+    if sid1 not in SECTIONS and sid1 != 'yonhap':
+        return RedirectResponse(url='/view')
+    if view not in VALID_VIEWS:
+        view = 'title'
+
+    cache_key = f"{sid1}:{sid2 or ''}" if sid1 != 'yonhap' else 'yonhap'
+    cache     = _get_section_cache(cache_key)
+
+    now      = time.time()
+    is_stale = (not cache['articles']) or ((now - cache['fetched_at']) > CACHE_TTL)
+    if is_stale and cache_key not in _section_crawling:
+        base_url = (
+            f'https://news.naver.com/main/list.naver?mode=LS2D'
+            f'&mid=sec&sid1={sid1}&sid2={sid2}'
+            if sid2 else CATEGORY_BASE_URLS.get(sid1, CATEGORY_BASE_URLS['001'])
+        )
+        asyncio.create_task(_run_section_crawl(cache_key, base_url))
+
+    all_articles = cache['articles']
+    section_info = SECTIONS.get(sid1, {})
+    section_name = section_info.get('name', '연합뉴스') if sid1 != 'yonhap' else '연합뉴스'
+
+    # AI 배지 없이 표시하기 위해 predicted_label 기본값 세팅
+    for a in all_articles:
+        if 'predicted_label' not in a:
+            a['predicted_label'] = 0
+        if 'fake_score' not in a:
+            a['fake_score'] = 0.0
+
+    total_pages  = max(1, (len(all_articles) + VIEW_PAGE_SIZE - 1) // VIEW_PAGE_SIZE)
+    current_page = min(page, total_pages)
+    start        = (current_page - 1) * VIEW_PAGE_SIZE
+    page_articles = all_articles[start: start + VIEW_PAGE_SIZE]
+
+    nav_extra_params = f'&sid2={sid2}' if sid2 else ''
+
+    return templates.TemplateResponse(
+        request=request,
+        name='naver_news_right.html',
+        context={
+            'news_list':        page_articles,
+            'all_articles':     all_articles,
+            'show_badges':      False,
+            'real_count':       0,
+            'fake_count':       0,
+            'total_count':      len(all_articles),
+            'today':            _today_str(),
+            'section_name':     section_name,
+            'section_id':       sid1,
+            'sub_categories':   section_info.get('sub_categories', []),
+            'active_sid2':      sid2,
+            'enriching':        cache.get('enriching', False),
+            'cache_key':        cache_key,
+            'loading':          len(all_articles) == 0,
+            'view_type':        view,
+            'current_page':     current_page,
+            'total_pages':      total_pages,
+            'nav_url_base':     f'/rview/section/{sid1}',
+            'nav_extra_params': nav_extra_params,
+        },
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 라우트 — 네이버 뉴스 서버 사이드 프록시 (iframe X-Frame-Options 우회)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_NAVER_LIST_URL = 'https://news.naver.com/main/list.naver?mode=LSD&mid=sec&sid1=001'
+_PROXY_HEADERS = {
+    'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                       'AppleWebKit/537.36 (KHTML, like Gecko) '
+                       'Chrome/124.0.0.0 Safari/537.36',
+    'Referer':         'https://news.naver.com/',
+    'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
+    'Accept':          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+}
+
+
+def _fetch_naver_raw(url: str) -> str:
+    """urllib로 실제 네이버 뉴스 HTML 동기 다운로드 (Windows DNS 호환)."""
+    ctx = ssl.create_default_context()
+    req = urllib.request.Request(url, headers=_PROXY_HEADERS)
+    with urllib.request.urlopen(req, context=ctx, timeout=12) as resp:
+        charset = 'utf-8'
+        ct = resp.headers.get('Content-Type', '')
+        if 'euc-kr' in ct.lower():
+            charset = 'euc-kr'
+        return resp.read().decode(charset, errors='replace')
+
+
+_PROXY_INTERCEPT_JS = '''\
+<script>
+(function(){
+  document.addEventListener('click', function(e){
+    var a = e.target;
+    while (a && a.tagName !== 'A') a = a.parentElement;
+    if (!a || !a.href) return;
+    var href = a.href;
+    if (href.indexOf('javascript:') === 0 || href.indexOf('mailto:') === 0 || href.indexOf('#') === 0) return;
+    if (a.getAttribute('target') === '_blank') return;
+    if (href.indexOf('naver.com') !== -1 && href.indexOf('/proxy/page') === -1) {
+      e.preventDefault();
+      e.stopPropagation();
+      window.location.href = '/proxy/page?url=' + encodeURIComponent(href);
+    }
+  }, true);
+})();
+</script>'''
+
+
+def _fix_naver_html(html: str) -> str:
+    """프록시된 HTML의 URL을 절대경로로 수정, 클릭 인터셉터 주입."""
+    # 1) 프로토콜 생략 URL(//...) → https://
+    html = re.sub(r'((?:src|href|action|content)=["\'])//([^"\']+)',
+                  lambda m: m.group(1) + 'https://' + m.group(2), html)
+    html = re.sub(r"((?:src|href|action|content)=')//([^']+)",
+                  lambda m: m.group(1) + 'https://' + m.group(2), html)
+    # 2) <head> 직후에 base href 삽입 → 상대경로 자동 해결
+    html = re.sub(r'(<head[^>]*>)',
+                  r'\1\n<base href="https://news.naver.com/" target="_self">',
+                  html, count=1, flags=re.IGNORECASE)
+    # 3) X-Frame-Options / CSP 메타태그 제거 (HTTP 헤더 차단 우회)
+    html = re.sub(r'<meta[^>]+(?:x-frame-options|content-security-policy)[^>]*>',
+                  '', html, flags=re.IGNORECASE)
+    # 4) 클릭 인터셉터 삽입: Naver 링크 → /proxy/page?url= 경유 (기사 페이지 iframe 차단 방지)
+    if re.search(r'</body>', html, re.IGNORECASE):
+        html = re.sub(r'(</body>)', _PROXY_INTERCEPT_JS + r'\n\1', html,
+                      count=1, flags=re.IGNORECASE)
+    else:
+        html += _PROXY_INTERCEPT_JS
+    return html
+
+
+# ── 네이버 실제 aside 추출 ────────────────────────────────────────────────────
+
+# 제거할 광고 선택자 목록 (네이버 광고 패턴)
+_AD_SELECTORS = [
+    '.da_wrap', '.NE_B_ad', '.aside_ad',
+    '[class*="da_"]', '[id*="da_"]',
+    '[class*="NE_B_ad"]',
+    'iframe',
+    '.ad', '.advertisement',
+    '._au_ad', '[class*="_ad_"]',
+    '.partner_news_wrap',         
+    '.promotion_area',
+    '.ad_area',
+    # ── 실제 네이버 사이드 광고 (사용자 제공 HTML에서 확인된 패턴) ──
+    '.side_ad',                  
+    '[id*="glad"]',             
+    '[class*="glad"]',            
+    '[id*="ad_sidebox"]',      
+    '[id*="aside_ad"]',            
+    '.banner_ad',                  
+    '[class*="banner_ad"]',       
+    'script[src*="glad"]',         
+    '.naver_image_side_banner',    
+]
+
+
+def _extract_naver_aside_sync(raw_html: str) -> str:
+    """BeautifulSoup으로 네이버 HTML에서 td.aside 내용 추출, 광고 제거.
+    결과는 <td> 태그 없이 내부 HTML만 반환 (템플릿 td.aside 안에 삽입용)."""
+    try:
+        soup = BeautifulSoup(raw_html, 'lxml')
+
+        aside_td = soup.select_one('td.aside')
+        if not aside_td:
+            aside_td = soup.select_one('#aside') or soup.find('aside')
+        if not aside_td:
+            return ''
+
+        for sel in _AD_SELECTORS:
+            for el in aside_td.select(sel):
+                el.decompose()
+
+        for el in aside_td.find_all('script'):
+            el.decompose()
+
+
+        for tag in aside_td.find_all(True):
+            for attr in ('src', 'href', 'data-src'):
+                val = tag.get(attr, '')
+                if val.startswith('//'):
+                    tag[attr] = 'https:' + val
+                elif val.startswith('/') and not val.startswith('//'):
+                    tag[attr] = 'https://news.naver.com' + val
+
+        # 모든 링크는 새 탭으로 (iframe 안이므로)
+        for a in aside_td.find_all('a', href=True):
+            a['target'] = '_blank'
+
+        return aside_td.decode_contents()
+    except Exception as e:
+        print(f'[aside] 추출 실패: {e}')
+        return ''
+
+
+@app.get('/proxy/naver/aside', response_class=HTMLResponse)
+async def proxy_naver_aside():
+    """우측 패널 aside용: 실제 네이버 aside HTML 조각 (광고 제거)."""
+    # 캐시가 있고 5분 이내면 재사용
+    if _cache['aside_html'] and (time.time() - _cache['aside_at']) < CACHE_TTL:
+        return HTMLResponse(content=_cache['aside_html'])
+
+    # 없거나 만료됐으면 새로 fetch
+    try:
+        raw  = await asyncio.to_thread(_fetch_naver_raw, _NAVER_LIST_URL)
+        html = await asyncio.to_thread(_extract_naver_aside_sync, raw)
+        if html:
+            _cache['aside_html'] = html
+            _cache['aside_at']   = time.time()
+        return HTMLResponse(content=html or '')
+    except Exception as e:
+        print(f'[proxy/aside] 실패: {e}')
+        return HTMLResponse(content='')
+
+
+@app.get('/proxy/naver', response_class=HTMLResponse)
+async def proxy_naver(request: Request):
+    """왼쪽 패널: 실제 네이버 뉴스 페이지를 서버 프록시로 렌더링.
+    동시에 aside HTML을 추출해 캐시에 저장한다."""
+    try:
+        raw  = await asyncio.to_thread(_fetch_naver_raw, _NAVER_LIST_URL)
+        # aside 캐시가 비어 있으면 동시에 추출
+        if not _cache['aside_html']:
+            aside = await asyncio.to_thread(_extract_naver_aside_sync, raw)
+            if aside:
+                _cache['aside_html'] = aside
+                _cache['aside_at']   = time.time()
+        html = _fix_naver_html(raw)
+        return HTMLResponse(content=html)
+    except Exception as e:
+        print(f'[proxy] 네이버 직접 fetch 실패 ({e}) — 크롤러 캐시 fallback')
+        articles = _cache['articles']
+        return templates.TemplateResponse(
+            request=request,
+            name='naver_news_left.html',
+            context={
+                'news_list': articles[:30],
+                'loading':   len(articles) == 0,
+                'today':     _today_str(),
+            },
+        )
+
+
+@app.get('/proxy/page', response_class=HTMLResponse)
+async def proxy_page(url: str = Query(...)):
+    """왼쪽 패널: 개별 기사 페이지 프록시 — X-Frame-Options 우회."""
+    import urllib.parse as _up
+    parsed = _up.urlparse(url)
+    # 보안: naver.com 도메인만 허용
+    if 'naver.com' not in (parsed.netloc or ''):
+        return HTMLResponse(
+            content='<html><body style="font-family:sans-serif;padding:40px">'
+                    '<p>허용되지 않는 주소입니다.</p>'
+                    '<p><a href="javascript:history.back()">← 돌아가기</a></p>'
+                    '</body></html>',
+            status_code=403,
+        )
+    try:
+        raw  = await asyncio.to_thread(_fetch_naver_raw, url)
+        html = _fix_naver_html(raw)
+        return HTMLResponse(content=html)
+    except Exception as e:
+        print(f'[proxy/page] 실패: {url[:100]} → {e}')
+        return HTMLResponse(
+            content=f'<html><body style="font-family:sans-serif;padding:40px">'
+                    f'<p>페이지를 불러올 수 없습니다.</p>'
+                    f'<p style="font-size:12px;color:#999">{e}</p>'
+                    f'<p><a href="javascript:history.back()">← 돌아가기</a></p>'
+                    f'</body></html>',
+        )
 
 
 # ── API 엔드포인트 ───────────────────────────────────────────────────────────
