@@ -29,12 +29,21 @@ from src.detector import get_sorted_timeline
 # ── CSV 결과 데이터 로더 ──────────────────────────────────────────────────────
 _RESULT_CSV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                  'data', 'realtime_news_result.csv')
+_result_cache: dict = {'articles': [], 'mtime': 0.0}
 
 def _load_result_articles() -> list[dict]:
     try:
-        df = pd.read_csv(_RESULT_CSV_PATH, encoding='utf-8-sig')
+        mtime = os.path.getmtime(_RESULT_CSV_PATH)
     except FileNotFoundError:
         return []
+
+    if mtime == _result_cache['mtime']:
+        return _result_cache['articles']
+
+    try:
+        df = pd.read_csv(_RESULT_CSV_PATH, encoding='utf-8-sig')
+    except Exception:
+        return _result_cache['articles']
 
     records = []
     for _, row in df.iterrows():
@@ -48,14 +57,14 @@ def _load_result_articles() -> list[dict]:
             'time':            str(row.get('pub_time', row.get('date', ''))),
             'image_url':       img if img else None,
             'summary':         str(row.get('summary', '')) if pd.notna(row.get('summary')) else '',
-            'fake_score':      prob,         
+            'fake_score':      prob,
             'body_ready':      True,
-            # ── 결과 페이지 전용 ─────────────────────────────────────
-            'predicted_label': label,         # 0=진짜, 1=가짜  ← 구분·정렬 기준
+            'predicted_label': label,
         })
 
-    # predicted_label 오름차순(0→1), 동점이면 fake_score 오름차순
     records.sort(key=lambda x: (x['predicted_label'], x['fake_score']))
+    _result_cache['articles'] = records
+    _result_cache['mtime']    = mtime
     return records
 
 
@@ -154,6 +163,8 @@ _cache: dict = {
     'enriching':  False,
     'aside_html': '',      # 실제 네이버 aside HTML (광고 제거 후)
     'aside_at':   0,       # aside 마지막 갱신 시각
+    'proxy_html': '',      # /proxy/naver 전체 HTML 캐시
+    'proxy_at':   0,       # proxy_html 마지막 갱신 시각
 }
 CACHE_TTL       = 300   # 5분
 PAGE_SIZE       = 30    # 메인/섹션 페이지당 기사 수
@@ -373,13 +384,31 @@ async def _refresh_loop():
                 await asyncio.sleep(0.5) 
 
 
+async def _warmup_proxy_naver():
+    """서버 시작 시 /proxy/naver HTML을 백그라운드에서 미리 캐싱."""
+    try:
+        raw  = await asyncio.to_thread(_fetch_naver_raw, _NAVER_LIST_URL)
+        if not _cache['aside_html']:
+            aside = await asyncio.to_thread(_extract_naver_aside_sync, raw)
+            if aside:
+                _cache['aside_html'] = aside
+                _cache['aside_at']   = time.time()
+        html = _fix_naver_html(raw)
+        _cache['proxy_html'] = html
+        _cache['proxy_at']   = time.time()
+        print('[app] /proxy/naver 워밍업 완료')
+    except Exception as e:
+        print(f'[app] /proxy/naver 워밍업 실패: {e}')
+
+
 # ── 서버 라이프사이클 관리 ──────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print('[app] 서버 시작 — 디스크 캐시 선 로드 중...')
-    _load_all_disk_caches()                            
+    _load_all_disk_caches()
     print('[app] 속보(메인) + 전체 섹션 사전 크롤링 시작...')
     asyncio.create_task(_run_crawl())
+    asyncio.create_task(_warmup_proxy_naver())
     warmup_task  = asyncio.create_task(_staggered_warmup())
     refresh_task = asyncio.create_task(_refresh_loop())
     yield
@@ -893,6 +922,9 @@ async def proxy_naver_aside():
 async def proxy_naver(request: Request):
     """왼쪽 패널: 실제 네이버 뉴스 페이지를 서버 프록시로 렌더링.
     동시에 aside HTML을 추출해 캐시에 저장한다."""
+    if _cache['proxy_html'] and (time.time() - _cache['proxy_at']) < CACHE_TTL:
+        return HTMLResponse(content=_cache['proxy_html'])
+
     try:
         raw  = await asyncio.to_thread(_fetch_naver_raw, _NAVER_LIST_URL)
         # aside 캐시가 비어 있으면 동시에 추출
@@ -902,6 +934,8 @@ async def proxy_naver(request: Request):
                 _cache['aside_html'] = aside
                 _cache['aside_at']   = time.time()
         html = _fix_naver_html(raw)
+        _cache['proxy_html'] = html
+        _cache['proxy_at']   = time.time()
         return HTMLResponse(content=html)
     except Exception as e:
         print(f'[proxy] 네이버 직접 fetch 실패 ({e}) — 크롤러 캐시 fallback')
@@ -917,6 +951,9 @@ async def proxy_naver(request: Request):
         )
 
 
+_PAGE_CACHE_TTL = 180   # 기사 페이지 캐시 3분
+_page_cache: dict[str, dict] = {}  # {url: {'html': str, 'at': float}}
+
 @app.get('/proxy/page', response_class=HTMLResponse)
 async def proxy_page(url: str = Query(...)):
     """왼쪽 패널: 개별 기사 페이지 프록시 — X-Frame-Options 우회."""
@@ -931,9 +968,15 @@ async def proxy_page(url: str = Query(...)):
                     '</body></html>',
             status_code=403,
         )
+
+    cached = _page_cache.get(url)
+    if cached and (time.time() - cached['at']) < _PAGE_CACHE_TTL:
+        return HTMLResponse(content=cached['html'])
+
     try:
         raw  = await asyncio.to_thread(_fetch_naver_raw, url)
         html = _fix_naver_html(raw)
+        _page_cache[url] = {'html': html, 'at': time.time()}
         return HTMLResponse(content=html)
     except Exception as e:
         print(f'[proxy/page] 실패: {url[:100]} → {e}')
