@@ -9,11 +9,11 @@
   data/vector/english_tfidf.npz        — 영어 TF-IDF 희소 행렬
   data/vector/english_labels.npy       — 영어 레이블 (0=진짜, 1=가짜)
   data/vector/english_dvl_flags.npy    — 영어 5대 분류 플래그 (n x 5)
-  data/vector/english_vectorizer.pkl   — 영어 TfidfVectorizer (재사용용)
+  data/vector/english_vectorizer.pkl   — 영어 TfidfVectorizer (재사용)
   data/vector/korean_tfidf.npz         — 한국어 TF-IDF 희소 행렬
   data/vector/korean_labels.npy        — 한국어 레이블 (0=진짜, 1=가짜)
   data/vector/korean_dvl_flags.npy     — 한국어 5대 분류 플래그 (n x 5)
-  data/vector/korean_vectorizer.pkl    — 한국어 TfidfVectorizer (재사용용)
+  data/vector/korean_vectorizer.pkl    — 한국어 TfidfVectorizer (재사용)
 
 캐시:
   data/processed/unified_news_tokenized.csv — 한국어 형태소 분석 결과 (최초 1회)
@@ -47,12 +47,33 @@ ENGLISH_MEDIA = {
     'politics', 'US_News', 'left-news', 'Government News',
 }
 
+# 한국어 불용어: 범용 동사 + 문어체 의존어 (가짜/진짜 구분에 기여 없음)
+KOREAN_STOPWORDS = {
+    # 범용 동사 
+    '하다', '있다', '되다', '돼다', '이다', '않다', '없다',
+    '받다', '늘다', '따르다', '오다', '가다', '보다', '같다',
+    '아니다', '그렇다', '이렇다', '어떻다', '나오다', '보이다',
+    '들다', '내다', '맞다', '시키다', '만들다', '대다',
+    '이르다', '나타나다', '밝히다', '말하다',
+    # 문어체 연결어 / 의존어
+    '위해', '통해', '대한', '대해', '때문', '함께', '한편',
+    '가운데', '지난', '이번', '현재', '최근', '특히',
+    '모든', '모두', '다른', '이상', '이후', '부터',
+    '다양하다', '높다', '가능하다', '필요하다', '가장',
+    '이렇게', '라며', '우리', '자신',
+}
+
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 멀티프로세싱 워커 
+# 멀티프로세싱 워커
 # ─────────────────────────────────────────────────────────────────────────────
 
 _okt = None  # 각 워커 프로세스 내 전역 Okt 인스턴스
+
+# 유의미한 품사만 유지 (조사·어미·구두점 제거)
+# Noun(명사), Verb(동사), Adjective(형용사), Adverb(부사),
+# Alpha(영문 약어: KBS/MOU 등), Foreign(외래어), Number(숫자)
+KEEP_POS = {'Noun', 'Verb', 'Adjective', 'Adverb', 'Alpha', 'Foreign', 'Number'}
 
 def _init_worker():
     """워커 프로세스 시작 시 Okt를 1회 초기화."""
@@ -61,10 +82,14 @@ def _init_worker():
     _okt = Okt()
 
 def _morph(text):
-    """워커 함수: 모듈 전역 _okt 인스턴스를 재사용."""
+    """품사 태깅 후 조사·어미·구두점을 제거하고 유의미한 형태소만 반환."""
     global _okt
     try:
-        return ' '.join(_okt.morphs(str(text), stem=True))
+        tokens = [
+            word for word, pos in _okt.pos(str(text), stem=True)
+            if pos in KEEP_POS and len(word) > 1
+        ]
+        return ' '.join(tokens)
     except Exception:
         return ''
 
@@ -119,7 +144,7 @@ def vectorize_english(df: pd.DataFrame):
     t0 = time.time()
     vec = TfidfVectorizer(
         max_features=50000,
-        min_df=2,
+        min_df=10,
         ngram_range=(1, 2),
         stop_words='english',
         sublinear_tf=True,
@@ -138,13 +163,9 @@ def vectorize_english(df: pd.DataFrame):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _run_morpheme_analysis(texts: pd.Series) -> pd.Series:
-    """multiprocessing.Pool로 형태소 분석 병렬화.
-    pandarallel 대신 Pool+initializer를 쓰는 이유:
-    JPype 객체(Okt)는 dill/pickle 직렬화 불가 → pandarallel 사용 불가.
-    initializer로 각 워커가 Okt를 독립적으로 초기화하면 직렬화 문제 없음.
-    """
+    """multiprocessing.Pool로 형태소 분석 병렬화."""
     try:
-        from konlpy.tag import Okt  # noqa: F401 — 설치 확인용
+        from konlpy.tag import Okt 
     except ImportError:
         print('\n[오류] KoNLPy가 설치되지 않았습니다.')
         print('  설치: pip install konlpy  (Java 1.8+ 필요)')
@@ -178,7 +199,7 @@ def vectorize_korean(df: pd.DataFrame):
         tok_df = pd.read_csv(TOKENIZED_CACHE)
         tokens = tok_df['tokens'].fillna('')
     else:
-        print('  형태소 분석 시작 (최초 1회만 — 이후 캐시 재사용)')
+        print('  형태소 분석 시작 (최초 1회만 - 이후 캐시 재사용)')
         tokens = _run_morpheme_analysis(df['clean_message'].fillna(''))
 
         cache_df = pd.DataFrame({
@@ -195,7 +216,9 @@ def vectorize_korean(df: pd.DataFrame):
     vec = TfidfVectorizer(
         max_features=50000,
         min_df=2,
+        max_df=0.7,
         ngram_range=(1, 2),
+        stop_words=list(KOREAN_STOPWORDS),
         sublinear_tf=True,
     )
     X = vec.fit_transform(tokens)
