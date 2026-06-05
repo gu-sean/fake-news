@@ -1,0 +1,177 @@
+Pre-vectorized TF-IDF + LogisticRegression tuning results - V4.2
+================================================================================
+TF-IDF file: C:\Users\tjdql\Desktop\V4_2\vector\korean_tfidf.npz
+Label file: C:\Users\tjdql\Desktop\V4_2\vector\korean_labels.npy
+DVL flag file: C:\Users\tjdql\Desktop\V4_2\vector\korean_dvl_flags.npy
+Matrix shape: (318235, 50000)
+Train rows: 254588 | Test rows: 63647
+Test size: 0.2
+LR configs: 12
+Planned runs: 12 / 12
+MAX_VECTOR_ROWS: all
+================================================================================
+Loaded TF-IDF matrix: (318235, 50000), nnz=54572229
+Training rows: 254588 | Test rows: 63647
+Running 12 / 12 LogisticRegression combinations
+Log file: C:\Users\tjdql\Desktop\V4_2\logistic_V4_2_log.txt
+
+[Run 1/12] LR: C=0.4, penalty=l1, solver=liblinear, class_weight=default, tol=0.0003, l1_ratio=default
+  Accuracy=0.7036 | Precision=0.7034 | Recall=0.7035 | Macro-F1=0.7034
+  ROC-AUC=0.7730
+  Confusion Matrix: tn=21713, fp=9188, fn=9679, tp=23067
+  Fit time: 15.8s
+  Problem type fake recall:
+    - stat_distortion: 0.5684 (15087 samples)
+    - causal_error: 0.6151 (19486 samples)
+    - emotional_provocation: 0.8152 (4458 samples)
+    - source_lack: 0.8200 (21065 samples)
+    - img_mismatch: 0.6466 (914 samples)
+  New best model saved.
+
+[Run 2/12] LR: C=0.6, penalty=l1, solver=liblinear, class_weight=default, tol=0.0003, l1_ratio=default
+  Accuracy=0.7076 | Precision=0.7074 | Recall=0.7075 | Macro-F1=0.7074
+  ROC-AUC=0.7787
+  Confusion Matrix: tn=21813, fp=9088, fn=9524, tp=23222
+  Fit time: 18.8s
+  Problem type fake recall:
+    - stat_distortion: 0.5744 (15087 samples)
+    - causal_error: 0.6220 (19486 samples)
+    - emotional_provocation: 0.7970 (4458 samples)
+    - source_lack: 0.8054 (21065 samples)
+    - img_mismatch: 0.6597 (914 samples)
+  New best model saved.
+
+[Run 3/12] LR: C=0.8, penalty=l1, solver=liblinear, class_weight=default, tol=0.0003, l1_ratio=default
+  Accuracy=0.7096 | Precision=0.7095 | Recall=0.7096 | Macro-F1=0.7095
+  ROC-AUC=0.7809
+  Confusion Matrix: tn=21867, fp=9034, fn=9447, tp=23299
+  Fit time: 21.8s
+  Problem type fake recall:
+    - stat_distortion: 0.5793 (15087 samples)
+    - causal_error: 0.6235 (19486 samples)
+    - emotional_provocation: 0.7862 (4458 samples)
+    - source_lack: 0.7974 (21065 samples)
+    - img_mismatch: 0.6597 (914 samples)
+  New best model saved.
+
+[Run 4/12] LR: C=0.9, penalty=l1, solver=liblinear, class_weight=default, tol=0.0003, l1_ratio=default
+  Accuracy=0.7095 | Precision=0.7093 | Recall=0.7094 | Macro-F1=0.7094
+  ROC-AUC=0.7812
+  Confusion Matrix: tn=21878, fp=9023, fn=9467, tp=23279
+  Fit time: 23.4s
+  Problem type fake recall:
+    - stat_distortion: 0.5792 (15087 samples)
+    - causal_error: 0.6227 (19486 samples)
+    - emotional_provocation: 0.7811 (4458 samples)
+    - source_lack: 0.7923 (21065 samples)
+    - img_mismatch: 0.6630 (914 samples)
+
+[Run 5/12] LR: C=1.0, penalty=l1, solver=liblinear, class_weight=default, tol=0.0003, l1_ratio=default
+  Accuracy=0.7107 | Precision=0.7105 | Recall=0.7106 | Macro-F1=0.7105
+  ROC-AUC=0.7812
+  Confusion Matrix: tn=21895, fp=9006, fn=9410, tp=23336
+  Fit time: 25.7s
+  Problem type fake recall:
+    - stat_distortion: 0.5818 (15087 samples)
+    - causal_error: 0.6234 (19486 samples)
+    - emotional_provocation: 0.7766 (4458 samples)
+    - source_lack: 0.7894 (21065 samples)
+    - img_mismatch: 0.6597 (914 samples)
+  New best model saved.
+
+[Run 6/12] LR: C=1.1, penalty=l1, solver=liblinear, class_weight=default, tol=0.0003, l1_ratio=default
+  Accuracy=0.7100 | Precision=0.7099 | Recall=0.7100 | Macro-F1=0.7099
+  ROC-AUC=0.7809
+  Confusion Matrix: tn=21857, fp=9044, fn=9411, tp=23335
+  Fit time: 26.9s
+  Problem type fake recall:
+    - stat_distortion: 0.5833 (15087 samples)
+    - causal_error: 0.6225 (19486 samples)
+    - emotional_provocation: 0.7728 (4458 samples)
+    - source_lack: 0.7864 (21065 samples)
+    - img_mismatch: 0.6575 (914 samples)
+
+[Run 7/12] LR: C=1.2, penalty=l1, solver=liblinear, class_weight=default, tol=0.0003, l1_ratio=default
+  Accuracy=0.7096 | Precision=0.7094 | Recall=0.7095 | Macro-F1=0.7094
+  ROC-AUC=0.7805
+  Confusion Matrix: tn=21845, fp=9056, fn=9429, tp=23317
+  Fit time: 28.2s
+  Problem type fake recall:
+    - stat_distortion: 0.5844 (15087 samples)
+    - causal_error: 0.6212 (19486 samples)
+    - emotional_provocation: 0.7710 (4458 samples)
+    - source_lack: 0.7842 (21065 samples)
+    - img_mismatch: 0.6565 (914 samples)
+
+[Run 8/12] LR: C=1.3, penalty=l1, solver=liblinear, class_weight=default, tol=0.0003, l1_ratio=default
+  Accuracy=0.7090 | Precision=0.7088 | Recall=0.7089 | Macro-F1=0.7088
+  ROC-AUC=0.7799
+  Confusion Matrix: tn=21835, fp=9066, fn=9458, tp=23288
+  Fit time: 29.8s
+  Problem type fake recall:
+    - stat_distortion: 0.5838 (15087 samples)
+    - causal_error: 0.6204 (19486 samples)
+    - emotional_provocation: 0.7678 (4458 samples)
+    - source_lack: 0.7813 (21065 samples)
+    - img_mismatch: 0.6586 (914 samples)
+
+[Run 9/12] LR: C=1.4, penalty=l1, solver=liblinear, class_weight=default, tol=0.0003, l1_ratio=default
+  Accuracy=0.7076 | Precision=0.7074 | Recall=0.7076 | Macro-F1=0.7075
+  ROC-AUC=0.7791
+  Confusion Matrix: tn=21782, fp=9119, fn=9489, tp=23257
+  Fit time: 31.1s
+  Problem type fake recall:
+    - stat_distortion: 0.5845 (15087 samples)
+    - causal_error: 0.6194 (19486 samples)
+    - emotional_provocation: 0.7654 (4458 samples)
+    - source_lack: 0.7794 (21065 samples)
+    - img_mismatch: 0.6521 (914 samples)
+
+[Run 10/12] LR: C=1.5, penalty=l1, solver=liblinear, class_weight=default, tol=0.0003, l1_ratio=default
+  Accuracy=0.7066 | Precision=0.7064 | Recall=0.7065 | Macro-F1=0.7064
+  ROC-AUC=0.7784
+  Confusion Matrix: tn=21749, fp=9152, fn=9522, tp=23224
+  Fit time: 33.6s
+  Problem type fake recall:
+    - stat_distortion: 0.5852 (15087 samples)
+    - causal_error: 0.6189 (19486 samples)
+    - emotional_provocation: 0.7624 (4458 samples)
+    - source_lack: 0.7772 (21065 samples)
+    - img_mismatch: 0.6488 (914 samples)
+
+[Run 11/12] LR: C=2.0, penalty=l1, solver=liblinear, class_weight=default, tol=0.0003, l1_ratio=default
+  Accuracy=0.7036 | Precision=0.7034 | Recall=0.7034 | Macro-F1=0.7034
+  ROC-AUC=0.7744
+  Confusion Matrix: tn=21605, fp=9296, fn=9571, tp=23175
+  Fit time: 40.4s
+  Problem type fake recall:
+    - stat_distortion: 0.5841 (15087 samples)
+    - causal_error: 0.6176 (19486 samples)
+    - emotional_provocation: 0.7553 (4458 samples)
+    - source_lack: 0.7686 (21065 samples)
+    - img_mismatch: 0.6400 (914 samples)
+
+[Run 12/12] LR: C=3.0, penalty=l1, solver=liblinear, class_weight=default, tol=0.0003, l1_ratio=default
+  Accuracy=0.6994 | Precision=0.6992 | Recall=0.6993 | Macro-F1=0.6992
+  ROC-AUC=0.7671
+  Confusion Matrix: tn=21498, fp=9403, fn=9730, tp=23016
+  Fit time: 46.0s
+  Problem type fake recall:
+    - stat_distortion: 0.5834 (15087 samples)
+    - causal_error: 0.6128 (19486 samples)
+    - emotional_provocation: 0.7405 (4458 samples)
+    - source_lack: 0.7564 (21065 samples)
+    - img_mismatch: 0.6346 (914 samples)
+
+================================================================================
+Finished in 5.7 minutes
+Best combination
+  Macro-F1: 0.7105
+  Accuracy: 0.7107
+  Precision: 0.7105
+  Recall: 0.7106
+  ROC-AUC: 0.7812
+  LogisticRegression: C=1.0, penalty=l1, solver=liblinear, class_weight=default, tol=0.0003, l1_ratio=default
+Saved model: C:\Users\tjdql\Desktop\V4_2\best_model_V4_2.pkl
+Saved best config: C:\Users\tjdql\Desktop\V4_2\best_config_V4_2.txt
+================================================================================
