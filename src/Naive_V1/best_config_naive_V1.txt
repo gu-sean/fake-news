@@ -1,0 +1,16 @@
+Best model configuration - Naive Bayes V1 pre-vectorized
+============================================================
+Macro F1: 0.6273
+Accuracy: 0.6279
+Precision: 0.6274
+Recall: 0.6272
+ROC-AUC: 0.6776
+Confusion Matrix [tn, fp, fn, tp]: [18710, 12191, 11495, 21251]
+NaiveBayes: model_type=multinomial, alpha=0.005, fit_prior=True, class_prior=default, norm=True, binarize=0.0
+
+Problem type fake recall
+- stat_distortion: 0.5716 (15087 samples)
+- causal_error: 0.6477 (19486 samples)
+- emotional_provocation: 0.6169 (4458 samples)
+- source_lack: 0.6495 (21065 samples)
+- img_mismatch: 0.3381 (914 samples)
