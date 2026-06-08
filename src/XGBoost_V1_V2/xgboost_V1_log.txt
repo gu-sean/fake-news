@@ -1,0 +1,140 @@
+Pre-vectorized TF-IDF + XGBoost tuning results - V1
+================================================================================
+TF-IDF file: C:\Users\tjdql\Desktop\XGBoost_V1\vector\korean_tfidf.npz
+Label file: C:\Users\tjdql\Desktop\XGBoost_V1\vector\korean_labels.npy
+DVL flag file: C:\Users\tjdql\Desktop\XGBoost_V1\vector\korean_dvl_flags.npy
+Matrix shape: (30000, 50000)
+Train rows: 21600 | Validation rows: 2400 | Test rows: 6000
+Test size: 0.2
+Validation size within training data: 0.1
+XGBoost fine-tuning grid size: 8
+Planned tuning runs: 8
+Early stopping rounds: 50
+MAX_VECTOR_ROWS: 30000
+================================================================================
+Loaded TF-IDF matrix: (30000, 50000), nnz=5142837
+Training rows: 21600 | Validation rows: 2400 | Test rows: 6000
+Running 8 combinations from the 8-configuration fine-tuning grid
+Log file: C:\Users\tjdql\Desktop\XGBoost_V1\xgboost_V1_log.txt
+
+[Run 1/8] XGB: max_depth=8, learning_rate=0.03, n_estimators=1500, subsample=0.8, colsample_bytree=0.1, min_child_weight=5, reg_alpha=1.0, reg_lambda=1.0
+  Accuracy=0.6967 | Precision=0.6965 | Recall=0.6960 | Macro-F1=0.6961
+  ROC-AUC=0.7618
+  Confusion Matrix: tn=1960, fp=953, fn=867, tp=2220
+  Best iteration: 1209
+  Fit time: 1056.8s
+  Problem type fake recall:
+    - stat_distortion: 0.5778 (1407 samples)
+    - causal_error: 0.6356 (1847 samples)
+    - emotional_provocation: 0.7971 (419 samples)
+    - source_lack: 0.8761 (2042 samples)
+    - img_mismatch: 0.5065 (77 samples)
+  New best model saved.
+
+[Run 2/8] XGB: max_depth=8, learning_rate=0.03, n_estimators=1500, subsample=0.8, colsample_bytree=0.2, min_child_weight=3, reg_alpha=1.0, reg_lambda=1.0
+  Accuracy=0.6948 | Precision=0.6947 | Recall=0.6941 | Macro-F1=0.6942
+  ROC-AUC=0.7636
+  Confusion Matrix: tn=1946, fp=967, fn=864, tp=2223
+  Best iteration: 792
+  Fit time: 788.0s
+  Problem type fake recall:
+    - stat_distortion: 0.5686 (1407 samples)
+    - causal_error: 0.6351 (1847 samples)
+    - emotional_provocation: 0.7995 (419 samples)
+    - source_lack: 0.8883 (2042 samples)
+    - img_mismatch: 0.5325 (77 samples)
+
+[Run 3/8] XGB: max_depth=9, learning_rate=0.03, n_estimators=1500, subsample=0.8, colsample_bytree=0.1, min_child_weight=3, reg_alpha=1.0, reg_lambda=1.0
+  Accuracy=0.6980 | Precision=0.6980 | Recall=0.6971 | Macro-F1=0.6972
+  ROC-AUC=0.7639
+  Confusion Matrix: tn=1937, fp=976, fn=836, tp=2251
+  Best iteration: 1321
+  Fit time: 1351.0s
+  Problem type fake recall:
+    - stat_distortion: 0.5920 (1407 samples)
+    - causal_error: 0.6400 (1847 samples)
+    - emotional_provocation: 0.8115 (419 samples)
+    - source_lack: 0.8732 (2042 samples)
+    - img_mismatch: 0.5584 (77 samples)
+  New best model saved.
+
+[Run 4/8] XGB: max_depth=9, learning_rate=0.03, n_estimators=1500, subsample=0.8, colsample_bytree=0.1, min_child_weight=5, reg_alpha=1.0, reg_lambda=1.0
+  Accuracy=0.6947 | Precision=0.6946 | Recall=0.6938 | Macro-F1=0.6940
+  ROC-AUC=0.7622
+  Confusion Matrix: tn=1939, fp=974, fn=858, tp=2229
+  Best iteration: 1337
+  Fit time: 1289.5s
+  Problem type fake recall:
+    - stat_distortion: 0.5835 (1407 samples)
+    - causal_error: 0.6405 (1847 samples)
+    - emotional_provocation: 0.8019 (419 samples)
+    - source_lack: 0.8712 (2042 samples)
+    - img_mismatch: 0.5584 (77 samples)
+
+[Run 5/8] XGB: max_depth=8, learning_rate=0.03, n_estimators=1500, subsample=0.8, colsample_bytree=0.2, min_child_weight=5, reg_alpha=1.0, reg_lambda=1.0
+  Accuracy=0.6982 | Precision=0.6980 | Recall=0.6975 | Macro-F1=0.6976
+  ROC-AUC=0.7625
+  Confusion Matrix: tn=1963, fp=950, fn=861, tp=2226
+  Best iteration: 1256
+  Fit time: 1166.6s
+  Problem type fake recall:
+    - stat_distortion: 0.5721 (1407 samples)
+    - causal_error: 0.6383 (1847 samples)
+    - emotional_provocation: 0.7971 (419 samples)
+    - source_lack: 0.8707 (2042 samples)
+    - img_mismatch: 0.5844 (77 samples)
+  New best model saved.
+
+[Run 6/8] XGB: max_depth=9, learning_rate=0.03, n_estimators=1500, subsample=0.8, colsample_bytree=0.2, min_child_weight=5, reg_alpha=1.0, reg_lambda=1.0
+  Accuracy=0.6985 | Precision=0.6984 | Recall=0.6977 | Macro-F1=0.6978
+  ROC-AUC=0.7638
+  Confusion Matrix: tn=1949, fp=964, fn=845, tp=2242
+  Best iteration: 807
+  Fit time: 853.1s
+  Problem type fake recall:
+    - stat_distortion: 0.5764 (1407 samples)
+    - causal_error: 0.6378 (1847 samples)
+    - emotional_provocation: 0.8091 (419 samples)
+    - source_lack: 0.8898 (2042 samples)
+    - img_mismatch: 0.5195 (77 samples)
+  New best model saved.
+
+[Run 7/8] XGB: max_depth=8, learning_rate=0.03, n_estimators=1500, subsample=0.8, colsample_bytree=0.1, min_child_weight=3, reg_alpha=1.0, reg_lambda=1.0
+  Accuracy=0.6957 | Precision=0.6956 | Recall=0.6949 | Macro-F1=0.6950
+  ROC-AUC=0.7625
+  Confusion Matrix: tn=1945, fp=968, fn=858, tp=2229
+  Best iteration: 1341
+  Fit time: 1278.5s
+  Problem type fake recall:
+    - stat_distortion: 0.5807 (1407 samples)
+    - causal_error: 0.6329 (1847 samples)
+    - emotional_provocation: 0.8067 (419 samples)
+    - source_lack: 0.8737 (2042 samples)
+    - img_mismatch: 0.5455 (77 samples)
+
+[Run 8/8] XGB: max_depth=9, learning_rate=0.03, n_estimators=1500, subsample=0.8, colsample_bytree=0.2, min_child_weight=3, reg_alpha=1.0, reg_lambda=1.0
+  Accuracy=0.6982 | Precision=0.6981 | Recall=0.6973 | Macro-F1=0.6974
+  ROC-AUC=0.7634
+  Confusion Matrix: tn=1944, fp=969, fn=842, tp=2245
+  Best iteration: 795
+  Fit time: 880.3s
+  Problem type fake recall:
+    - stat_distortion: 0.5785 (1407 samples)
+    - causal_error: 0.6389 (1847 samples)
+    - emotional_provocation: 0.8162 (419 samples)
+    - source_lack: 0.8849 (2042 samples)
+    - img_mismatch: 0.5455 (77 samples)
+
+================================================================================
+Finished in 144.4 minutes
+Best combination
+  Macro-F1: 0.6978
+  Accuracy: 0.6985
+  Precision: 0.6984
+  Recall: 0.6977
+  ROC-AUC: 0.7638
+  Best iteration: 807
+  XGBClassifier: max_depth=9, learning_rate=0.03, n_estimators=1500, subsample=0.8, colsample_bytree=0.2, min_child_weight=5, reg_alpha=1.0, reg_lambda=1.0
+Saved model: C:\Users\tjdql\Desktop\XGBoost_V1\best_model_xgboost_V1.pkl
+Saved best config: C:\Users\tjdql\Desktop\XGBoost_V1\best_config_xgboost_V1.txt
+================================================================================

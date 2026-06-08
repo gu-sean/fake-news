@@ -1,0 +1,9 @@
+이 폴더에 아래 3개의 파일을 집어넣으세요.
+Put the following 3 files into this forder.
+
+1. korean_dvl_flags.npy
+2. korean_labels.npy
+3. korean_tfidf.npz
+
+해당 파일들은 아래 링크에서 다운로드 받을 수 있습니다.
+https://drive.google.com/drive/folders/1I5SAlQwFbDqwydCVRxYApZu9S5gU9ySK
