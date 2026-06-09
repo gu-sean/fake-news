@@ -1,24 +1,108 @@
-# 네이버 뉴스 크롤러 
+# 네이버 뉴스 크롤러
 
 import os
 import asyncio
+import random
 import aiohttp
 import pandas as pd
 from bs4 import BeautifulSoup
 from datetime import datetime
 
-HEADERS = {
-    'User-Agent': (
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-        'AppleWebKit/537.36 (KHTML, like Gecko) '
-        'Chrome/124.0.0.0 Safari/537.36'
-    ),
-    'Referer': 'https://news.naver.com/',
-    'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
+# ── DVL 플래그 키워드 ──────────────────────────────────────────────────────────
+# 단일 단어 대신 가짜뉴스에서만 자주 쓰이는 다중 단어 패턴 위주로 구성
+# 진짜 뉴스에도 흔한 단어(때문에, 모든, 관계자 등)는 제외
+
+# 통계 왜곡: 근거 없이 수치를 절대화·과장하는 표현
+_KW_STAT_DISTORTION = [
+    '100% 효과', '100% 안전', '100% 확실', '100% 증명',
+    '단 한 명도', '예외 없이', '전원 사망', '전원 감염',
+    '완전히 사라졌다', '완전 치료', '기적의 치료',
+    '완벽하게 차단', '100% 예방',
+    '100% effective', '100% proven', 'without exception', '100% safe',
+    'guaranteed results', 'zero exceptions',
+]
+
+# 인과 오류: 근거 없는 단정적 인과관계 주장
+_KW_CAUSAL_ERROR = [
+    '이것이 원인', '직접적인 원인은', '유일한 원인',
+    '먹으면 낫는다', '하면 무조건 낫는', '이것만 먹으면',
+    '기적의 식품', '기적의 약', '만병통치',
+    '의학적으로 증명됐다', '과학적으로 완전히 증명',
+    'directly causes', 'proven to cure', 'miracle cure',
+    'this one trick', 'doctors hate', 'guaranteed to work',
+]
+
+# 감정 자극: 독자의 공포·분노·충격을 유발하는 선동적 표현
+_KW_EMOTIONAL_PROVOCATION = [
+    '충격 고백', '충격 폭로', '충격적인 진실', '충격 반전',
+    '경악스러운', '경악을 금치 못',
+    '분노 폭발', '공분을 사', '국민적 공분',
+    '당신만 모르는', '이것을 숨겼다', '쉬쉬하던',
+    '절대 알려주지 않는', '믿기지 않는 사실',
+    '상상도 못한 진실', '충격! 충격', '경고!!!',
+    'shocking truth', "they don't want you to know",
+    'what they hide', 'wake up sheeple', 'exposed!!!',
+]
+
+# 출처 불명: 익명·불확실 출처에만 의존하는 패턴
+_KW_SOURCE_LACK = [
+    '소식통에 따르면', '익명의 관계자', '익명을 요구한',
+    '카더라', '~라는 말이 있다', '알 수 없는 소식통',
+    '정체불명의', '확인되지 않은 보도', '출처 불명',
+    '누군가에 따르면', '업계 일각에서는 주장',
+    'anonymous sources claim', 'sources say without evidence',
+    'unconfirmed reports', 'rumor has it',
+]
+
+# 이미지 불일치: 이미지 조작·오용을 본문에서 직접 언급하는 패턴
+_KW_IMG_MISMATCH = [
+    '사진 속 인물은', '이 사진은 실제로', '조작된 사진',
+    '합성 사진', '가짜 사진', '이미지를 도용',
+    '실제 사진이 아닌', '다른 나라 사진을', '오래된 사진을 사용',
+    '사진이 조작됐다', '이미지 합성',
+    'photo is fake', 'image was manipulated', 'old photo used as',
+    'photo from different', 'doctored image',
+]
+
+# ── UA 풀: 다양한 브라우저/버전 로테이션으로 차단 회피 ───────────────────────
+_USER_AGENTS = [
+    # Chrome Windows
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    # Chrome Mac
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+    # Edge Windows
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0',
+    # Firefox
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:125.0) Gecko/20100101 Firefox/125.0',
+]
+
+_BASE_HEADERS = {
+    'Accept':          'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Referer':         'https://news.naver.com/',
+    'Connection':      'keep-alive',
+    'Cache-Control':   'no-cache',
 }
 
-CRAWL_WORKERS  = 20   # 동시 요청 수 
-MAX_CRAWL_PAGES = 20  # 수집할 최대 페이지 수
+def _random_headers() -> dict:
+    """매 요청마다 UA를 랜덤 선택해 반환."""
+    return {**_BASE_HEADERS, 'User-Agent': random.choice(_USER_AGENTS)}
+
+# 목록 수집용 고정 헤더 (세션 단위 사용)
+HEADERS = _random_headers()
+
+CRAWL_WORKERS   = 8    # 동시 요청 수 (차단 방지)
+MAX_CRAWL_PAGES = 20
+
+_BODY_DELAY_MIN = 0.3  # 본문 요청 간 최소 대기(초)
+_BODY_DELAY_MAX = 0.9  # 본문 요청 간 최대 대기(초)
+_RETRY_COUNT    = 2    # 실패 시 재시도 횟수
+_RETRY_DELAY    = 1.5  # 재시도 전 대기(초)
 
 BASE_FLASH_URL = 'https://news.naver.com/main/list.naver?mode=LSD&mid=sec&sid1=001'
 
@@ -38,47 +122,59 @@ CATEGORY_BASE_URLS: dict[str, str] = {
 # ── 내부 유틸 ──────────────────────────────────────────────────────────────
 
 def _make_connector_timeout() -> tuple[aiohttp.TCPConnector, aiohttp.ClientTimeout]:
-    """
-    aiohttp 커넥터 + 타임아웃 공통 생성.
-    ThreadedResolver: Windows ProactorEventLoop에서 async DNS 실패 문제 해결.
-    """
-    resolver  = aiohttp.ThreadedResolver()       
+    """aiohttp 커넥터 + 타임아웃 공통 생성.
+    ThreadedResolver: Windows ProactorEventLoop에서 async DNS 실패 문제 해결."""
+    resolver  = aiohttp.ThreadedResolver()
     connector = aiohttp.TCPConnector(limit=CRAWL_WORKERS, resolver=resolver)
-    timeout   = aiohttp.ClientTimeout(total=15)
+    timeout   = aiohttp.ClientTimeout(total=20)
     return connector, timeout
 
 
 async def _get_soup(session: aiohttp.ClientSession, url: str) -> BeautifulSoup | None:
-    """단일 URL 비동기 fetch → BeautifulSoup 반환. 실패 시 None."""
-    try:
-        async with session.get(url) as resp:
-            resp.raise_for_status()
-            text = await resp.text(errors='replace')
-            return await asyncio.to_thread(BeautifulSoup,text, 'lxml')
-    except Exception as e:
-        print(f'[crawler] request failed: {url} -> {e}')
-        return None
+    """단일 URL 비동기 fetch → BeautifulSoup 반환. 실패 시 재시도 후 None."""
+    for attempt in range(_RETRY_COUNT):
+        try:
+            hdrs = _random_headers()
+            async with session.get(url, headers=hdrs) as resp:
+                if resp.status == 429:
+                    wait = _RETRY_DELAY * (attempt + 1)
+                    await asyncio.sleep(wait)
+                    continue
+                resp.raise_for_status()
+                text = await resp.text(errors='replace')
+                return await asyncio.to_thread(BeautifulSoup, text, 'lxml')
+        except Exception as e:
+            if attempt < _RETRY_COUNT - 1:
+                await asyncio.sleep(_RETRY_DELAY)
+            else:
+                print(f'[crawler] request failed: {url} -> {e}')
+    return None
 
 
 async def _fetch_article_body(session: aiohttp.ClientSession, url: str) -> str:
-    """기사 상세 페이지 본문 비동기 크롤링 (네트워크 다운로드만 비동기 처리)"""
-    try:
-        async with session.get(url) as resp:
-            resp.raise_for_status()
-            text = await resp.text(errors='replace')
-            
-            # [최적화 3] 다운로드된 텍스트를 스레드 풀로 넘겨 백그라운드에서 정제 및 추출합니다.
-            return await asyncio.to_thread(_extract_body_sync, text)
-    except Exception as e:
-        print(f'[crawler] body fetch failed: {url} -> {e}')
-        return ''
+    """기사 상세 페이지 본문 비동기 크롤링. 랜덤 딜레이 + 재시도 포함."""
+    await asyncio.sleep(random.uniform(_BODY_DELAY_MIN, _BODY_DELAY_MAX))
+
+    for attempt in range(_RETRY_COUNT):
+        try:
+            hdrs = _random_headers()
+            async with session.get(url, headers=hdrs) as resp:
+                if resp.status == 429:
+                    await asyncio.sleep(_RETRY_DELAY * (attempt + 2))
+                    continue
+                resp.raise_for_status()
+                text = await resp.text(errors='replace')
+                return await asyncio.to_thread(_extract_body_sync, text)
+        except Exception as e:
+            if attempt < _RETRY_COUNT - 1:
+                await asyncio.sleep(_RETRY_DELAY)
+            else:
+                print(f'[crawler] body fetch failed: {url} -> {e}')
+    return ''
 
 
 def _extract_body_sync(text: str) -> str:
-    """
-    CPU 소모가 큰 본문 파싱, 태그 탐색, decompose(제거) 연산을 
-    하나의 동기 함수로 묶어 멀티스레드 환경에서 처리하도록 분리합니다.
-    """
+    """CPU 소모가 큰 본문 파싱을 스레드풀에서 처리."""
     soup = BeautifulSoup(text, 'lxml')
     for sel in [
         '#dic_area',
@@ -95,18 +191,12 @@ def _extract_body_sync(text: str) -> str:
     return ''
 
 
-
 def _parse_listing_page(soup: BeautifulSoup, articles: list[dict], idx: int) -> int:
     """목록 페이지 soup에서 기사 메타데이터를 파싱해 articles에 추가. 갱신된 idx 반환.
-
-    지원 구조:
-      - ul.type06_headline / ul.type06 : 요약형 (dt 기반, dd 안에 press/date)
-      - ul.type02                       : 제목형 (li 안에 a·span 직접 배치)
-        → 연합뉴스 속보(LPOD 모드) 등에서 사용
     """
     items = (soup.select('.list_body ul.type06_headline li')
              + soup.select('.list_body ul.type06 li')
-             + soup.select('.list_body ul.type02 li'))   # ← 연합뉴스 LPOD 구조 추가
+             + soup.select('.list_body ul.type02 li'))
 
     for item in items:
         try:
@@ -115,10 +205,8 @@ def _parse_listing_page(soup: BeautifulSoup, articles: list[dict], idx: int) -> 
 
             dts = item.select('dt')
             if dts:
-          
                 a_tag = dts[-1].select_one('a')
             else:
-               
                 a_tag = item.select_one('a')
             if not a_tag:
                 continue
@@ -139,7 +227,9 @@ def _parse_listing_page(soup: BeautifulSoup, articles: list[dict], idx: int) -> 
 
             if not title or not url:
                 continue
-            if any(x['url'] == url for x in articles):   # 중복 방지
+            if any(x['url'] == url for x in articles):
+                continue
+            if any(x['title'] == title for x in articles):
                 continue
 
             idx += 1
@@ -154,7 +244,7 @@ def _parse_listing_page(soup: BeautifulSoup, articles: list[dict], idx: int) -> 
                 'url':        url,
                 'image_url':  image_url,
                 'summary':    summary,
-                'text':       summary,    # Phase 2에서 본문으로 교체
+                'text':       summary,
                 'body_ready': False,
             })
         except Exception:
@@ -167,8 +257,7 @@ def _parse_listing_page(soup: BeautifulSoup, articles: list[dict], idx: int) -> 
 
 async def fetch_listing_pages(max_pages: int = MAX_CRAWL_PAGES,
                                base_url: str = None) -> list[dict]:
-    """Phase 1: 목록 페이지를 max_pages개 동시 요청으로 수집 (aiohttp + asyncio.gather).
-    app.py에서는 메인=3, 메인섹션=2, 세부섹션=1 로 호출."""
+    """Phase 1: 목록 페이지를 max_pages개 동시 요청으로 수집."""
     if base_url is None:
         base_url = BASE_FLASH_URL
 
@@ -177,14 +266,13 @@ async def fetch_listing_pages(max_pages: int = MAX_CRAWL_PAGES,
 
     print(f'[crawler] {max_pages}페이지 동시 fetch 시작 (workers={CRAWL_WORKERS})...')
     async with aiohttp.ClientSession(
-        headers=HEADERS, connector=connector, timeout=timeout
+        connector=connector, timeout=timeout
     ) as session:
         soups_list = await asyncio.gather(
             *[_get_soup(session, f"{base_url}&page={p}") for p in page_nums],
             return_exceptions=True,
         )
 
-    # 실패(None / Exception)를 걸러내고 페이지 번호와 매핑
     soups: dict[int, BeautifulSoup] = {
         p: s
         for p, s in zip(page_nums, soups_list)
@@ -211,10 +299,8 @@ async def fetch_listing_pages(max_pages: int = MAX_CRAWL_PAGES,
 
 
 async def enrich_bodies(articles: list[dict]) -> None:
-    """
-    Phase 2: 기사 본문을 비동기로 병렬 수집.
-    Semaphore로 동시 요청 수를 CRAWL_WORKERS로 제한.
-    """
+    """Phase 2: 기사 본문을 비동기로 병렬 수집.
+    Semaphore로 동시 요청 수를 CRAWL_WORKERS로 제한."""
     to_enrich = [a for a in articles if not a.get('body_ready')]
     total = len(to_enrich)
     done  = 0
@@ -237,7 +323,7 @@ async def enrich_bodies(articles: list[dict]) -> None:
 
     connector, timeout = _make_connector_timeout()
     async with aiohttp.ClientSession(
-        headers=HEADERS, connector=connector, timeout=timeout
+        connector=connector, timeout=timeout
     ) as session:
         await asyncio.gather(*[_fetch_one(a, session) for a in to_enrich])
 
@@ -248,30 +334,6 @@ async def enrich_bodies(articles: list[dict]) -> None:
 # ── CSV 저장 ──────────────────────────────────────────────────────────────
 
 def save_to_csv(articles: list[dict], filename: str = "data/realtime/realtime_news.csv"):
-    """
-    ── 표준 스키마 컬럼  ─────────────────────────────
-    id                   : int   — 행 고유 식별자 (1부터 순번)
-    title                : str   — 기사 제목 (원문)
-    content              : str   — 기사 본문 (원문, 최대 10,000자). Phase1=요약, Phase2=전문
-    media                : str   — 출처 매체명 (불명 시 Unknown)
-    date                 : str   — 수집일 (YYYY-MM-DD)
-    label                : int   — 정답 레이블 (0=진짜/1=가짜). 추론용 CSV는 NaN
-    clean_message        : str   — 학습용 정제 텍스트 (소문자화·특수문자 제거)
-    stat_distortion      : int   — [DVL 1] 통계 왜곡 패턴 (0/1)
-    causal_error         : int   — [DVL 2] 인과 오류 패턴 (0/1)
-    emotional_provocation: int   — [DVL 3] 감정 자극 패턴 (0/1)
-    source_lack          : int   — [DVL 4] 출처 불명 패턴 (0/1)
-    img_mismatch         : int   — [DVL 5] 이미지 불일치 패턴 (0/1)
-
-    ── 실시간 크롤링 추가 컬럼 ──────────────────────────
-    url                  : str   — 기사 원문 URL
-    category             : str   — 기사 카테고리
-    pub_time             : str   — 목록 페이지 발행 시각
-    image_url            : str   — 대표 썸네일 URL (없으면 None)
-    summary              : str   — 목록 리드 요약문
-    fake_score           : float — AI 탐지 점수 (0.0~100.0)
-    body_ready           : bool  — Phase 2 본문 수집 완료 여부
-    """
     if not articles:
         print("[crawler] 저장할 뉴스 데이터가 없습니다.")
         return
@@ -279,8 +341,11 @@ def save_to_csv(articles: list[dict], filename: str = "data/realtime/realtime_ne
     os.makedirs(os.path.dirname(filename), exist_ok=True)
 
     raw      = pd.DataFrame(articles)
-    text_col = raw['text'].fillna('').astype(str)
-    today    = datetime.now().strftime('%Y-%m-%d')
+    text_col  = raw['text'].fillna('').astype(str)
+    title_col = raw['title'].fillna('').astype(str)
+    # 제목 + 본문을 합쳐서 검사 (가짜뉴스 패턴은 제목에서도 자주 나타남)
+    full_col  = title_col + ' ' + text_col
+    today     = datetime.now().strftime('%Y-%m-%d')
 
     def _dvl(col, keywords):
         return col.apply(lambda x: 1 if any(w in x for w in keywords) else 0)
@@ -295,11 +360,11 @@ def save_to_csv(articles: list[dict], filename: str = "data/realtime/realtime_ne
     out['clean_message'] = (
         text_col.str.replace(r'[^가-힣a-zA-Z0-9\s]', '', regex=True).str.lower()
     )
-    out['stat_distortion']         = _dvl(text_col, ['100%', '모든', '항상', '절대', 'never', 'always'])
-    out['causal_error']            = _dvl(text_col, ['때문에', '원인', '증명', '결과적으로', 'causes', 'proves'])
-    out['emotional_provocation']   = _dvl(text_col, ['충격', '경악', '분노', 'shocking', 'outrage', 'unbelievable'])
-    out['source_lack']             = _dvl(text_col, ['관계자', '소식통', '익명', 'sources say', 'reportedly'])
-    out['img_mismatch']            = _dvl(text_col, ['사진 속', '이 사진은', 'photo shows', 'pictured here'])
+    out['stat_distortion']       = _dvl(full_col, _KW_STAT_DISTORTION)
+    out['causal_error']          = _dvl(full_col, _KW_CAUSAL_ERROR)
+    out['emotional_provocation'] = _dvl(full_col, _KW_EMOTIONAL_PROVOCATION)
+    out['source_lack']           = _dvl(full_col, _KW_SOURCE_LACK)
+    out['img_mismatch']          = _dvl(full_col, _KW_IMG_MISMATCH)
 
     out['url']        = raw['url']
     out['category']   = raw['category']   if 'category'   in raw.columns else '속보'

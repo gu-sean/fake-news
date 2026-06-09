@@ -24,12 +24,124 @@ from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 
 from src.crawler import fetch_listing_pages, enrich_bodies, CATEGORY_BASE_URLS
-from src.detector import get_sorted_timeline
+from src.detector import (get_sorted_timeline, predict_articles_inplace,
+                          predict_logistic_inplace, predict_svm_inplace,
+                          predict_ensemble_inplace,
+                          _load_xgb, _load_logistic, _load_svm, _load_nb)
 
 # ── CSV 결과 데이터 로더 ──────────────────────────────────────────────────────
 _RESULT_CSV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                  'data', 'realtime_news_result.csv')
 _result_cache: dict = {'articles': [], 'mtime': 0.0}
+
+# ── 학습 데이터 가짜뉴스 샘플 로더 ──────────────────────────────────────────────
+# 팩트체크 크롤링 데이터만 사용 (AI Hub 데이터 미사용)
+_FACTCHECK_CSV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                    'data', 'factcheck', 'factcheck_label.csv')
+_fake_sample_cache: list = []
+
+def _load_fake_sample_articles(limit: int = 60) -> list[dict]:
+    """팩트체크 크롤링 가짜뉴스 샘플 로드.
+    data/factcheck/factcheck_label.csv 없으면 빈 목록 반환.
+    서버 시작 시 1회만 로드 후 캐시 재사용."""
+    global _fake_sample_cache
+    if _fake_sample_cache:
+        return _fake_sample_cache
+
+    if not os.path.exists(_FACTCHECK_CSV_PATH):
+        print('[fake_csv] 팩트체크 데이터 없음 (python src/factcheck_crawler.py 실행 필요)')
+        return []
+
+    try:
+        df = pd.read_csv(_FACTCHECK_CSV_PATH, encoding='utf-8-sig')
+        fake_df = df[df['label'] == 1].copy()
+        if fake_df.empty:
+            print('[fake_csv] 팩트체크 데이터: label=1 기사 없음')
+            return []
+
+        sample = fake_df.sample(n=min(limit, len(fake_df)), random_state=42)
+        records = []
+        for _, row in sample.iterrows():
+            content = str(row.get('content', '') or '')
+            article_url = str(row.get('url', '') or '')
+            if not article_url or article_url in ('nan', 'None'):
+                article_url = '#'
+            verdict_raw = row.get('verdict', '')
+            verdict = '' if (verdict_raw is None or str(verdict_raw).strip() in ('', 'nan', 'None')) else str(verdict_raw).strip()
+            press_raw = row.get('media', '')
+            press = str(press_raw) if (press_raw is not None and str(press_raw).strip() not in ('', 'nan', 'None')) else 'KBS팩트체크K'
+            records.append({
+                'title':                str(row.get('title', '')),
+                'url':                  article_url,
+                'press':                press,
+                'time':                 str(row.get('date', '') or ''),
+                'image_url':            None,
+                'summary':              (f"[{verdict}] " if verdict else '') + content[:200],
+                'text':                 content,
+                'body_ready':           True,
+                'source':               '팩트체크',
+                'stat_distortion':      int(row.get('stat_distortion', 0) or 0),
+                'causal_error':         int(row.get('causal_error', 0) or 0),
+                'emotional_provocation':int(row.get('emotional_provocation', 0) or 0),
+                'source_lack':          int(row.get('source_lack', 0) or 0),
+                'img_mismatch':         int(row.get('img_mismatch', 0) or 0),
+            })
+
+        # XGBoost로 실제 예측 (고정값 95.0 대신)
+        predict_articles_inplace(records, lang='auto')
+
+        # 예측 실패한 기사는 기본값 설정
+        for r in records:
+            if 'fake_score' not in r:
+                r['fake_score']      = 0.0
+                r['predicted_label'] = 0
+
+        _fake_sample_cache = records
+        print(f'[fake_csv] 팩트체크 가짜뉴스 샘플 {len(records)}건 로드 (XGBoost 예측 완료)')
+        return records
+    except Exception as e:
+        print(f'[fake_csv] 로드 실패: {e}')
+        return []
+
+
+def _write_result_csv(articles: list[dict]) -> None:
+    """크롤링 기사를 realtime_news_result.csv 형식으로 저장.
+    모델 파일이 없을 때 기본값(predicted_label=0)으로 채워 오른쪽 패널을 자동 갱신."""
+    if not articles:
+        return
+    try:
+        rows = []
+        for i, a in enumerate(articles, 1):
+            fake_score = round(float(a.get('fake_score') or 0), 2)
+            rows.append({
+                'id':                    i,
+                'title':                 a.get('title', ''),
+                'content':               a.get('text', a.get('summary', '')),
+                'media':                 a.get('press', ''),
+                'date':                  datetime.now().strftime('%Y-%m-%d'),
+                'label':                 None,
+                'clean_message':         '',
+                'stat_distortion':       a.get('stat_distortion', 0),
+                'causal_error':          a.get('causal_error', 0),
+                'emotional_provocation': a.get('emotional_provocation', 0),
+                'source_lack':           a.get('source_lack', 0),
+                'img_mismatch':          a.get('img_mismatch', 0),
+                'url':                   a.get('url', ''),
+                'category':              a.get('category', '속보'),
+                'pub_time':              a.get('time', ''),
+                'image_url':             a.get('image_url', ''),
+                'summary':               a.get('summary', ''),
+                'fake_score':            fake_score,
+                'body_ready':            a.get('body_ready', False),
+                'predicted_label':       a.get('predicted_label', 1 if fake_score >= 50 else 0),
+                'fake_probability(%)':   fake_score,
+                '결과_텍스트':            '🚨 가짜뉴스' if a.get('predicted_label', fake_score >= 50) else '✅ 진짜뉴스',
+            })
+        pd.DataFrame(rows).to_csv(_RESULT_CSV_PATH, index=False, encoding='utf-8-sig')
+        print(f'[result] realtime_news_result.csv 갱신: {len(rows)}건')
+    except Exception as e:
+        print(f'[result] realtime_news_result.csv 저장 실패: {e}')
+
 
 def _load_result_articles() -> list[dict]:
     try:
@@ -51,16 +163,31 @@ def _load_result_articles() -> list[dict]:
         label = int(row.get('predicted_label', 0) or 0)
         img   = str(row.get('image_url', ''))
         records.append({
-            'title':           str(row.get('title', '')),
-            'url':             str(row.get('url', '#')),
-            'press':           str(row.get('media', '')),
-            'time':            str(row.get('pub_time', row.get('date', ''))),
-            'image_url':       img if img else None,
-            'summary':         str(row.get('summary', '')) if pd.notna(row.get('summary')) else '',
-            'fake_score':      prob,
-            'body_ready':      True,
-            'predicted_label': label,
+            'title':                str(row.get('title', '')),
+            'url':                  str(row.get('url', '#')),
+            'press':                str(row.get('media', '')),
+            'time':                 str(row.get('pub_time', row.get('date', ''))),
+            'image_url':            img if img else None,
+            'summary':              str(row.get('summary', '')) if pd.notna(row.get('summary')) else '',
+            'fake_score':           prob,
+            'body_ready':           True,
+            'predicted_label':      label,
+            'stat_distortion':      int(row.get('stat_distortion', 0) or 0),
+            'causal_error':         int(row.get('causal_error', 0) or 0),
+            'emotional_provocation':int(row.get('emotional_provocation', 0) or 0),
+            'source_lack':          int(row.get('source_lack', 0) or 0),
+            'img_mismatch':         int(row.get('img_mismatch', 0) or 0),
         })
+
+    # 제목 기준 중복 제거 (같은 제목 다른 URL 기사 - 크롤러가 복수 수집한 경우)
+    seen_titles: set = set()
+    deduped: list = []
+    for r in records:
+        t = r['title'].strip()
+        if t not in seen_titles:
+            seen_titles.add(t)
+            deduped.append(r)
+    records = deduped
 
     records.sort(key=lambda x: (x['predicted_label'], x['fake_score']))
     _result_cache['articles'] = records
@@ -166,11 +293,13 @@ _cache: dict = {
     'proxy_html': '',      # /proxy/naver 전체 HTML 캐시
     'proxy_at':   0,       # proxy_html 마지막 갱신 시각
 }
-CACHE_TTL       = 300   # 5분
-PAGE_SIZE       = 30    # 메인/섹션 페이지당 기사 수
-VIEW_PAGE_SIZE  = 10    # 우측 패널(/view, /rview) 페이지당 기사 수
-VIEW_PAGE_GROUP = 8     # 페이지 네비게이션 한 번에 표시할 페이지 수
-CACHE_DIR  = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'cache')
+CACHE_TTL        = 300    # 5분 — 기사 데이터 캐시
+_LVIEW_CACHE_TTL = 1800   # 30분 — lview/proxy HTML 캐시 (변경 빈도 낮음)
+PAGE_SIZE        = 30     # 메인/섹션 페이지당 기사 수
+VIEW_PAGE_SIZE   = 30     # 우측 패널(/view, /rview) 페이지당 기사 수
+VIEW_PAGE_GROUP  = 8      # 페이지 네비게이션 한 번에 표시할 페이지 수
+CACHE_DIR        = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'cache')
+_PROXY_HTML_PATH = os.path.join(CACHE_DIR, 'proxy_naver.html')
 _crawl_in_progress = False
 
 # ── 섹션별 캐시 ───────────────────────────────────────────────────────────
@@ -261,6 +390,27 @@ def _load_all_disk_caches():
             print(f'[cache] 로드 실패 ({fname}): {e}')
     print(f'[cache] 총 {loaded}개 캐시 파일 로드 완료')
 
+    # proxy_naver.html 디스크 캐시 로드 (왼쪽 패널 첫 로딩 즉시화)
+    if os.path.exists(_PROXY_HTML_PATH):
+        try:
+            with open(_PROXY_HTML_PATH, 'r', encoding='utf-8') as f:
+                _cache['proxy_html'] = f.read()
+            _cache['proxy_at'] = os.path.getmtime(_PROXY_HTML_PATH)
+            print('[cache] proxy_naver.html 디스크 캐시 로드 완료')
+        except Exception as e:
+            print(f'[cache] proxy_naver.html 로드 실패: {e}')
+
+
+def _save_proxy_html_to_disk(html: str) -> None:
+    """proxy_html을 디스크에 저장 — 서버 재시작 시 즉시 서빙 가능."""
+    try:
+        _ensure_cache_dir()
+        with open(_PROXY_HTML_PATH, 'w', encoding='utf-8') as f:
+            f.write(html)
+        print('[cache] proxy_naver.html 디스크 저장 완료')
+    except Exception as e:
+        print(f'[cache] proxy_naver.html 저장 실패: {e}')
+
 
 # ── 공통 크롤링 로직  ──────────────────────────
 
@@ -276,7 +426,7 @@ async def _run_crawl():
     async with CRAWL_SEMAPHORE:
         try:
             print('[app] Phase 1 시작: 목록 페이지 수집...')
-            raw = await fetch_listing_pages(max_pages=3)   
+            raw = await fetch_listing_pages(max_pages=20)
             articles = get_sorted_timeline(raw)
             # 진짜(fake_score<50) 상단, 가짜(fake_score≥50) 하단 정렬
             articles.sort(key=lambda x: (0 if (x.get('fake_score') or 0) < 50 else 1,
@@ -295,9 +445,12 @@ async def _run_crawl():
     try:
         print('[app] Phase 2 시작: 기사 본문 백그라운드 수집...')
         await enrich_bodies(raw)
+        # 본문이 추가된 상태로 XGBoost 재예측 (정확도 향상)
+        predict_articles_inplace(raw, lang='korean')
         _cache['fetched_at'] = time.time()
         _cache['enriching']  = False
-        _save_cache_to_disk('main', _cache['articles']) 
+        _save_cache_to_disk('main', _cache['articles'])
+        _write_result_csv(_cache['articles'])
         print('[app] Phase 2 완료')
     except Exception as e:
         print(f'[app] Phase 2 실패: {e}')
@@ -313,10 +466,10 @@ async def _run_section_crawl(cache_key: str, base_url: str):
     _section_crawling.add(cache_key)
     cache = _get_section_cache(cache_key)
 
-    # 세부 카테고리(sid2 존재)는 1페이지, 메인 카테고리는 2페이지
+    # 세부 카테고리(sid2 존재)는 2페이지, 메인 카테고리는 8페이지
     # cache_key 형식: "100:" (메인) vs "100:269" (세부)
     is_sub = cache_key != 'yonhap' and cache_key.split(':')[-1] != ''
-    max_pages = 1 if is_sub else 2
+    max_pages = 2 if is_sub else 8
 
     # ------------------------------------------------------------------
     # Phase 1: 목록 수집만 세마포어 내부에서 빠르게 실행하고 빠져나옵니다.
@@ -357,7 +510,7 @@ async def _run_section_crawl(cache_key: str, base_url: str):
 
 async def _staggered_warmup():
     """서버 시작 시 모든 섹션(메인 7 + 세부 41 + 연합 1 = 49개)을
-    0.2초 간격으로 순차 등록해 백그라운드 크롤링을 시작합니다."""
+    0.2초 간격으로 순차 등록해 백그라운드 크롤링을 시작"""
     for cache_key, base_url in PREFETCH_SECTIONS:
         if cache_key not in _section_crawling:
             print(f'[app] 사전 워밍 시작: [{cache_key}]')
@@ -370,45 +523,131 @@ async def _refresh_loop():
     while True:
         await asyncio.sleep(CACHE_TTL)
         now = time.time()
-        print('[app] 자동 갱신 주기 도래 — 스테일 캐시 갱신 시작')
+        print('[app] 자동 갱신 주기 도래 - 스테일 캐시 갱신 시작')
 
         # 메인(속보) 캐시
         if (now - _cache['fetched_at']) > CACHE_TTL and not _crawl_in_progress:
             asyncio.create_task(_run_crawl())
 
-        # 섹션 캐시
+        # 섹션 캐시 (기사 목록)
         for cache_key, base_url in PREFETCH_SECTIONS:
             sec_cache = _get_section_cache(cache_key)
             if (now - sec_cache['fetched_at']) > CACHE_TTL and cache_key not in _section_crawling:
                 asyncio.create_task(_run_section_crawl(cache_key, base_url))
-                await asyncio.sleep(0.5) 
+                await asyncio.sleep(0.5)
+
+        # lview 프록시 HTML 캐시 — 만료된 섹션을 동시 갱신
+        stale = [
+            (sid, url) for sid, url in _SIDEBAR_SECTIONS
+            if url and (now - _lview_proxy_cache.get(f'{sid}:', {}).get('at', 0)) > _LVIEW_CACHE_TTL
+        ]
+        if stale:
+            asyncio.create_task(asyncio.gather(*[
+                _cache_lview_one(sid, url, force=True) for sid, url in stale
+            ]))
 
 
 async def _warmup_proxy_naver():
     """서버 시작 시 /proxy/naver HTML을 백그라운드에서 미리 캐싱."""
     try:
-        raw  = await asyncio.to_thread(_fetch_naver_raw, _NAVER_LIST_URL)
+        # aside 추출은 원본 URL(listType 없음)로, HTML 캐싱은 title 뷰로
+        raw_base = await _fetch_naver_raw(_NAVER_LIST_URL)
         if not _cache['aside_html']:
-            aside = await asyncio.to_thread(_extract_naver_aside_sync, raw)
+            aside = await asyncio.to_thread(_extract_naver_aside_sync, raw_base)
             if aside:
                 _cache['aside_html'] = aside
                 _cache['aside_at']   = time.time()
-        html = _fix_naver_html(raw)
+        raw  = await _fetch_naver_raw(_NAVER_LIST_URL_TITLE)
+        html = await asyncio.to_thread(_fix_naver_html, raw)   # 스레드풀
         _cache['proxy_html'] = html
         _cache['proxy_at']   = time.time()
+        _save_proxy_html_to_disk(html)                          # 디스크 저장
         print('[app] /proxy/naver 워밍업 완료')
     except Exception as e:
         print(f'[app] /proxy/naver 워밍업 실패: {e}')
 
 
+_SIDEBAR_SECTIONS: list[tuple[str, str]] = []  # lifespan 후 채워짐
+
+
+async def _cache_lview_one(sid: str, url: str, force: bool = False,
+                           sid2: str = None):
+    """단일 섹션 lview 프록시 HTML 을 fetch·가공해 캐시에 저장.
+    sid2 지정 시 LS2D 세부 카테고리 URL로 fetch.
+    항상 listType=title 로 fetch해 5개묶음 제목형 구조를 가져옴."""
+    cache_key_str = f'{sid}:{sid2}:' if sid2 else f'{sid}:'
+    if not force and cache_key_str in _lview_proxy_cache:
+        return
+    if sid2:
+        title_url = (f'https://news.naver.com/main/list.naver'
+                     f'?mode=LS2D&mid=sec&sid1={sid}&sid2={sid2}&listType=title')
+    else:
+        title_url = url + '&listType=title' if '?' in url else url + '?listType=title'
+    try:
+        raw  = await _fetch_naver_raw(title_url)
+        html = await asyncio.to_thread(_fix_naver_html, raw, True)   # 스레드풀
+        _lview_proxy_cache[cache_key_str] = {'html': html, 'at': time.time()}
+        label = f'{sid}:{sid2}' if sid2 else sid
+        print(f'[lview] [{label}] 캐싱 완료')
+    except Exception as e:
+        label = f'{sid}:{sid2}' if sid2 else sid
+        print(f'[lview] [{label}] 캐싱 실패: {e}')
+
+
+async def _warmup_lview_sections():
+    """서버 시작 시 사이드바 섹션 + 세부 카테고리를 순차적으로 캐싱.
+    메인 9개 먼저, 이후 세부 카테고리를 백그라운드 태스크로 순차 처리."""
+    global _SIDEBAR_SECTIONS
+    _SIDEBAR_SECTIONS = [
+        ('100',    CATEGORY_BASE_URLS.get('100', '')),
+        ('101',    CATEGORY_BASE_URLS.get('101', '')),
+        ('102',    CATEGORY_BASE_URLS.get('102', '')),
+        ('103',    CATEGORY_BASE_URLS.get('103', '')),
+        ('104',    CATEGORY_BASE_URLS.get('104', '')),
+        ('105',    CATEGORY_BASE_URLS.get('105', '')),
+        ('110',    CATEGORY_BASE_URLS.get('110', '')),
+        ('001',    CATEGORY_BASE_URLS.get('001', '')),
+        ('yonhap', YONHAP_URL),
+    ]
+    # 1단계: 메인 카테고리 9개 동시 캐싱
+    await asyncio.gather(*[
+        _cache_lview_one(sid, url)
+        for sid, url in _SIDEBAR_SECTIONS if url
+    ])
+    print('[lview] main sections cached, starting sub-category background cache')
+
+    # 2단계: 세부 카테고리 순차 캐싱 (과부하 방지를 위해 0.5초 간격)
+    async def _cache_sub_sections():
+        for sid1, section in SECTIONS.items():
+            for sub in section.get('sub_categories', []):
+                sid2 = sub.get('sid2')
+                if not sid2:
+                    continue
+                await _cache_lview_one(sid1, '', sid2=sid2)
+                await asyncio.sleep(0.5)
+        print('[lview] 세부 카테고리 전체 캐싱 완료')
+
+    asyncio.create_task(_cache_sub_sections())
+    print('[lview] 전체 사이드바 섹션 사전 캐싱 완료')
+
+
 # ── 서버 라이프사이클 관리 ──────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print('[app] 서버 시작 — 디스크 캐시 선 로드 중...')
+    print('[app] 서버 시작 - 디스크 캐시 선 로드 중...')
     _load_all_disk_caches()
+    # 전체 모델 선로드 (첫 요청 지연 방지)
+    await asyncio.to_thread(_load_xgb,      'korean')
+    await asyncio.to_thread(_load_xgb,      'english')
+    await asyncio.to_thread(_load_logistic, 'korean')
+    await asyncio.to_thread(_load_svm,      'korean')
+    await asyncio.to_thread(_load_nb,       'korean')
+    print('[app] proxy/naver 워밍업 대기 중 (첫 진입 정상 구조 보장)...')
+    await _warmup_proxy_naver()          # 완료 후 서버 오픈 → 첫 요청도 올바른 Naver HTML 서빙
     print('[app] 속보(메인) + 전체 섹션 사전 크롤링 시작...')
     asyncio.create_task(_run_crawl())
-    asyncio.create_task(_warmup_proxy_naver())
+    asyncio.create_task(_warmup_lview_sections())
+    asyncio.create_task(asyncio.to_thread(_load_fake_sample_articles))
     warmup_task  = asyncio.create_task(_staggered_warmup())
     refresh_task = asyncio.create_task(_refresh_loop())
     yield
@@ -418,7 +657,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="속보 - AI 가짜뉴스 탐지", lifespan=lifespan)
 templates = Jinja2Templates(directory="templates")
-app.mount("/static", StaticFiles(directory="templates"), name="static")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 # ── 공통 유틸 ─────────────────────────────────────────────────────────────
@@ -426,8 +665,9 @@ VALID_VIEWS = {'title', 'summary', 'photo', 'paper'}
 
 
 def _today_str() -> str:
-    return (datetime.now().strftime('%Y.%m.%d. ')
-            + ['월', '화', '수', '목', '금', '토', '일'][datetime.now().weekday()] + '요일')
+    now = datetime.now()
+    dow = ['월', '화', '수', '목', '금', '토', '일'][now.weekday()]
+    return f'{now.month:02d}.{now.day:02d}({dow})'
 
 
 def _paginate(all_articles: list, page: int):
@@ -652,19 +892,81 @@ async def view_page(
     request: Request,
     page: int = Query(default=1, ge=1),
     view: str = Query(default='title'),
+    flt:  str = Query(default='all', alias='filter'),
+    model: str = Query(default=None),
 ):
     """우측 패널 전용: AI 탐지 결과 기사 목록 (네이버 클론 CSS 적용)."""
+    _DVL_FILTERS = {
+        'stat_distortion':      '통계 왜곡',
+        'causal_error':         '인과 오류',
+        'emotional_provocation':'감정 자극',
+        'source_lack':          '출처 불명',
+        'img_mismatch':         '이미지 불일치',
+    }
     if view not in VALID_VIEWS:
         view = 'title'
+    if flt not in ('all', 'real', 'fake') and flt not in _DVL_FILTERS:
+        flt = 'all'
 
-    all_articles = _load_result_articles()
-    real_count   = sum(1 for a in all_articles if a['predicted_label'] == 0)
-    fake_count   = sum(1 for a in all_articles if a['predicted_label'] == 1)
+    # 실시간 기사(네이버) + 학습 데이터 가짜뉴스 샘플 합산
+    realtime_articles = _load_result_articles()
+    fake_samples      = _load_fake_sample_articles(limit=60)
+    all_articles      = realtime_articles + fake_samples
 
-    total_pages  = max(1, (len(all_articles) + VIEW_PAGE_SIZE - 1) // VIEW_PAGE_SIZE)
+    # 모델 선택 시 기사 재예측
+    if model == 'logistic':
+        all_articles = [dict(a) for a in all_articles]
+        await asyncio.to_thread(predict_logistic_inplace, all_articles)
+    elif model == 'svm':
+        all_articles = [dict(a) for a in all_articles]
+        await asyncio.to_thread(predict_svm_inplace, all_articles)
+    elif model == 'ensemble':
+        all_articles = [dict(a) for a in all_articles]
+        await asyncio.to_thread(predict_ensemble_inplace, all_articles)
+
+    show_badges = model in ('xgboost', 'logistic', 'svm', 'ensemble')
+
+    if show_badges:
+        real_count = sum(1 for a in all_articles if a['predicted_label'] == 0)
+        fake_count = sum(1 for a in all_articles if a['predicted_label'] == 1)
+        fake_arts  = [a for a in all_articles if a['predicted_label'] == 1]
+        dvl_counts = [
+            ('통계 왜곡',     sum(a.get('stat_distortion', 0)       for a in fake_arts), 'stat_distortion'),
+            ('인과 오류',     sum(a.get('causal_error', 0)           for a in fake_arts), 'causal_error'),
+            ('감정 자극',     sum(a.get('emotional_provocation', 0)  for a in fake_arts), 'emotional_provocation'),
+            ('출처 불명',     sum(a.get('source_lack', 0)            for a in fake_arts), 'source_lack'),
+            ('이미지 불일치', sum(a.get('img_mismatch', 0)           for a in fake_arts), 'img_mismatch'),
+        ]
+        # 진짜(0) 상단, 가짜(1) 하단 정렬 + DVL 필터 적용
+        if flt == 'real':
+            filtered = [a for a in all_articles if a['predicted_label'] == 0]
+        elif flt == 'fake':
+            filtered = [a for a in all_articles if a['predicted_label'] == 1]
+        elif flt in _DVL_FILTERS:
+            filtered = [a for a in all_articles if a['predicted_label'] == 1 and a.get(flt, 0) == 1]
+        else:
+            filtered = sorted(all_articles,
+                              key=lambda x: (x['predicted_label'], x.get('fake_score', 0)))
+    else:
+        # 모델 미선택: 분류 없이 기사만 표시
+        real_count = 0
+        fake_count = 0
+        dvl_counts = []
+        filtered   = all_articles
+        flt        = 'all'
+
+    total_pages  = max(1, (len(filtered) + VIEW_PAGE_SIZE - 1) // VIEW_PAGE_SIZE)
     current_page = min(page, total_pages)
     start        = (current_page - 1) * VIEW_PAGE_SIZE
-    page_articles = all_articles[start: start + VIEW_PAGE_SIZE]
+    page_articles = filtered[start: start + VIEW_PAGE_SIZE]
+
+    parts = []
+    if flt != 'all':
+        parts.append(f'filter={flt}')
+    if model:
+        parts.append(f'model={model}')
+    filter_param    = ('&' + '&'.join(parts)) if parts else ''
+    dvl_filter_name = _DVL_FILTERS.get(flt, '')
 
     return templates.TemplateResponse(
         request=request,
@@ -672,7 +974,7 @@ async def view_page(
         context={
             'news_list':        page_articles,
             'all_articles':     all_articles,
-            'show_badges':      True,
+            'show_badges':      show_badges,
             'real_count':       real_count,
             'fake_count':       fake_count,
             'total_count':      len(all_articles),
@@ -687,7 +989,11 @@ async def view_page(
             'current_page':     current_page,
             'total_pages':      total_pages,
             'nav_url_base':     '/view',
-            'nav_extra_params': '',
+            'nav_extra_params': filter_param,
+            'active_filter':    flt,
+            'active_model':     model or '',
+            'dvl_counts':       dvl_counts,
+            'dvl_filter_name':  dvl_filter_name,
         },
     )
 
@@ -699,12 +1005,16 @@ async def rview_section(
     page: int = Query(default=1, ge=1),
     view: str = Query(default='title'),
     sid2: str = Query(default=None),
+    flt: str = Query(default='all', alias='filter'),
+    model: str = Query(default=None),
 ):
-    """우측 패널 전용: 카테고리 섹션 기사 목록 (AI 배지 없음, 재귀 방지)."""
+    """우측 패널 전용: 카테고리 섹션 기사 목록."""
     if sid1 not in SECTIONS and sid1 != 'yonhap':
         return RedirectResponse(url='/view')
     if view not in VALID_VIEWS:
         view = 'title'
+    if flt not in ('all', 'real', 'fake'):
+        flt = 'all'
 
     cache_key = f"{sid1}:{sid2 or ''}" if sid1 != 'yonhap' else 'yonhap'
     cache     = _get_section_cache(cache_key)
@@ -723,19 +1033,63 @@ async def rview_section(
     section_info = SECTIONS.get(sid1, {})
     section_name = section_info.get('name', '연합뉴스') if sid1 != 'yonhap' else '연합뉴스'
 
-    # AI 배지 없이 표시하기 위해 predicted_label 기본값 세팅
     for a in all_articles:
         if 'predicted_label' not in a:
             a['predicted_label'] = 0
         if 'fake_score' not in a:
             a['fake_score'] = 0.0
 
-    total_pages  = max(1, (len(all_articles) + VIEW_PAGE_SIZE - 1) // VIEW_PAGE_SIZE)
+    # 모델 선택 시 섹션 기사 재예측
+    if model == 'logistic':
+        all_articles = [dict(a) for a in all_articles]
+        await asyncio.to_thread(predict_logistic_inplace, all_articles)
+    elif model == 'svm':
+        all_articles = [dict(a) for a in all_articles]
+        await asyncio.to_thread(predict_svm_inplace, all_articles)
+    elif model == 'ensemble':
+        all_articles = [dict(a) for a in all_articles]
+        await asyncio.to_thread(predict_ensemble_inplace, all_articles)
+
+    show_badges = model in ('xgboost', 'logistic', 'svm', 'ensemble')
+
+    if show_badges:
+        real_count = sum(1 for a in all_articles if a.get('predicted_label', 0) == 0)
+        fake_count = sum(1 for a in all_articles if a.get('predicted_label', 0) == 1)
+        fake_arts  = [a for a in all_articles if a.get('predicted_label', 0) == 1]
+        dvl_counts = [
+            ('통계 왜곡',     sum(a.get('stat_distortion', 0)       for a in fake_arts), 'stat_distortion'),
+            ('인과 오류',     sum(a.get('causal_error', 0)           for a in fake_arts), 'causal_error'),
+            ('감정 자극',     sum(a.get('emotional_provocation', 0)  for a in fake_arts), 'emotional_provocation'),
+            ('출처 불명',     sum(a.get('source_lack', 0)            for a in fake_arts), 'source_lack'),
+            ('이미지 불일치', sum(a.get('img_mismatch', 0)           for a in fake_arts), 'img_mismatch'),
+        ]
+        if flt == 'real':
+            filtered = [a for a in all_articles if a.get('predicted_label', 0) == 0]
+        elif flt == 'fake':
+            filtered = [a for a in all_articles if a.get('predicted_label', 0) == 1]
+        else:
+            filtered = all_articles
+    else:
+        real_count = 0
+        fake_count = 0
+        dvl_counts = []
+        filtered   = all_articles
+        flt        = 'all'
+
+    total_pages  = max(1, (len(filtered) + VIEW_PAGE_SIZE - 1) // VIEW_PAGE_SIZE)
     current_page = min(page, total_pages)
     start        = (current_page - 1) * VIEW_PAGE_SIZE
-    page_articles = all_articles[start: start + VIEW_PAGE_SIZE]
+    page_articles = filtered[start: start + VIEW_PAGE_SIZE]
 
-    nav_extra_params = f'&sid2={sid2}' if sid2 else ''
+    # 페이지네이션에서 sid2 + filter + model 상태 유지
+    parts = []
+    if sid2:
+        parts.append(f'sid2={sid2}')
+    if flt != 'all':
+        parts.append(f'filter={flt}')
+    if model:
+        parts.append(f'model={model}')
+    nav_extra_params = ('&' + '&'.join(parts)) if parts else ''
 
     return templates.TemplateResponse(
         request=request,
@@ -743,9 +1097,9 @@ async def rview_section(
         context={
             'news_list':        page_articles,
             'all_articles':     all_articles,
-            'show_badges':      False,
-            'real_count':       0,
-            'fake_count':       0,
+            'show_badges':      show_badges,
+            'real_count':       real_count,
+            'fake_count':       fake_count,
             'total_count':      len(all_articles),
             'today':            _today_str(),
             'section_name':     section_name,
@@ -760,6 +1114,10 @@ async def rview_section(
             'total_pages':      total_pages,
             'nav_url_base':     f'/rview/section/{sid1}',
             'nav_extra_params': nav_extra_params,
+            'active_filter':    flt,
+            'active_model':     model or '',
+            'dvl_counts':       dvl_counts,
+            'dvl_filter_name':  '',
         },
     )
 
@@ -768,7 +1126,8 @@ async def rview_section(
 # 라우트 — 네이버 뉴스 서버 사이드 프록시 (iframe X-Frame-Options 우회)
 # ─────────────────────────────────────────────────────────────────────────────
 
-_NAVER_LIST_URL = 'https://news.naver.com/main/list.naver?mode=LSD&mid=sec&sid1=001'
+_NAVER_LIST_URL       = 'https://news.naver.com/main/list.naver?mode=LSD&mid=sec&sid1=001'
+_NAVER_LIST_URL_TITLE = _NAVER_LIST_URL + '&listType=title'
 _PROXY_HEADERS = {
     'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
                        'AppleWebKit/537.36 (KHTML, like Gecko) '
@@ -779,17 +1138,62 @@ _PROXY_HEADERS = {
 }
 
 
-def _fetch_naver_raw(url: str) -> str:
-    """urllib로 실제 네이버 뉴스 HTML 동기 다운로드 (Windows DNS 호환)."""
-    ctx = ssl.create_default_context()
-    req = urllib.request.Request(url, headers=_PROXY_HEADERS)
-    with urllib.request.urlopen(req, context=ctx, timeout=12) as resp:
-        charset = 'utf-8'
-        ct = resp.headers.get('Content-Type', '')
-        if 'euc-kr' in ct.lower():
-            charset = 'euc-kr'
-        return resp.read().decode(charset, errors='replace')
+async def _fetch_naver_raw(url: str) -> str:
+    """aiohttp로 실제 네이버 뉴스 HTML 비동기 다운로드 (크롤러와 동일한 방식, Windows DNS 호환)."""
+    import aiohttp as _aiohttp
+    resolver  = _aiohttp.ThreadedResolver()
+    connector = _aiohttp.TCPConnector(resolver=resolver)
+    timeout   = _aiohttp.ClientTimeout(total=15)
+    async with _aiohttp.ClientSession(
+        connector=connector,
+        timeout=timeout,
+        headers=_PROXY_HEADERS,
+    ) as session:
+        async with session.get(url, allow_redirects=True) as resp:
+            resp.raise_for_status()
+            return await resp.text(errors='replace')
 
+
+_NAVER_TITLE_INJECT = '''\
+<style id="_force_title_view">
+/* 실제 Naver HTML 구조: 이미지는 dt.photo, 요약은 span.lede, 제목은 dt(plain) */
+ul.type06_headline > li dt.photo,
+ul.type06 > li dt.photo { display:none !important; }
+ul.type06_headline .lede,
+ul.type06 .lede { display:none !important; }
+ul.type06_headline > li,
+ul.type06 > li { display:block !important; padding:7px 0 !important; border-bottom:1px solid #eaebf0; }
+ul.type06_headline > li dl,
+ul.type06 > li dl { display:block !important; margin:0; }
+ul.type06_headline > li dt,
+ul.type06 > li dt { display:block !important; }
+ul.type06_headline > li dt a,
+ul.type06 > li dt a { font-size:13px !important; font-weight:normal !important; color:#1a1a1a; }
+/* 혹시 thumb_area 구조도 있을 경우 대비 */
+.type06_headline .thumb_area,.type06 .thumb_area { display:none !important; }
+</style>
+<script>
+(function(){
+  function f(){
+    var t2=document.querySelectorAll('ul.type02');
+    if(t2.length>0){
+      /* type02 목록이 있으면: type06 숨기고 type02만 표시 */
+      ['type06_headline','type06'].forEach(function(c){
+        [].forEach.call(document.querySelectorAll('ul.'+c),function(el){
+          el.style.setProperty('display','none','important');
+        });
+      });
+      [].forEach.call(t2,function(el){
+        el.style.setProperty('display','block','important');
+      });
+    }
+    /* type02 없으면 CSS가 이미지/요약만 숨김 — type06 목록은 그대로 유지 */
+  }
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',function(){f();setTimeout(f,600);});
+  } else { f(); setTimeout(f,600); }
+})();
+</script>'''
 
 _PROXY_INTERCEPT_JS = '''\
 <script>
@@ -797,40 +1201,231 @@ _PROXY_INTERCEPT_JS = '''\
   document.addEventListener('click', function(e){
     var a = e.target;
     while (a && a.tagName !== 'A') a = a.parentElement;
-    if (!a || !a.href) return;
-    var href = a.href;
-    if (href.indexOf('javascript:') === 0 || href.indexOf('mailto:') === 0 || href.indexOf('#') === 0) return;
+    if (!a) return;
+    var rawHref = a.getAttribute('href') || '';
+    var href    = a.href    || '';
+    if (!rawHref || rawHref === '#'
+        || rawHref.indexOf('javascript:') === 0
+        || rawHref.indexOf('mailto:')     === 0) return;
     if (a.getAttribute('target') === '_blank') return;
-    if (href.indexOf('naver.com') !== -1 && href.indexOf('/proxy/page') === -1) {
+
+    /* 우리 서버 라우트 (/lview/, /proxy/) —
+       <base href> 가 naver.com 을 가리키므로 rawHref 로 직접 이동해야 함 */
+    if (rawHref.indexOf('/lview/') === 0 || rawHref.indexOf('/proxy/') === 0) {
       e.preventDefault();
       e.stopPropagation();
-      window.location.href = '/proxy/page?url=' + encodeURIComponent(href);
+      window.location.href = rawHref;
+      return;
+    }
+
+    /* 뷰타입 탭 (listType=) — 우리 서버 /lview/section/{sid}?listType={lt} 로 변환
+       실제 Naver HTML: href="list.naver;jsessionid=...?...&listType=xxx" (상대경로)
+       base href 적용 후 a.href = "https://news.naver.com/list.naver;..." 형태 */
+    if (href.indexOf('news.naver.com') !== -1
+        && href.indexOf('listType=') !== -1) {
+      e.preventDefault();
+      e.stopPropagation();
+      var sidM = href.match(/[?&]sid1=(\\d+)/);
+      var ltM  = href.match(/[?&]listType=([^&]+)/);
+      var sid  = sidM ? sidM[1] : '001';
+      var lt   = ltM  ? ltM[1]  : 'title';
+      window.location.href = '/lview/section/' + sid + '?listType=' + encodeURIComponent(lt);
+      return;
+    }
+
+    /* 기사 URL → 새 탭 */
+    if (href.indexOf('n.news.naver.com') !== -1
+        || href.indexOf('/article/') !== -1
+        || href.indexOf('/mnews/')    !== -1
+        || href.indexOf('/read.naver') !== -1) {
+      e.preventDefault();
+      e.stopPropagation();
+      window.open(href, '_blank');
     }
   }, true);
 })();
 </script>'''
 
+_NAVER_ASIDE_JS = '''\
+<script>
+/* 왼쪽 패널 aside 버튼 복원 — Naver 스크립트 제거 후 재구현 */
+(function(){
+  function initAside(){
+    /* 랭킹 섹션: _refreshButton → 다음 5개 순환, _rankingInfoButton → 안내 토글 */
+    document.querySelectorAll('[class*="_officeTopRanking"]').forEach(function(base){
+      var lists   = base.querySelectorAll('._rankingList');
+      var current = 0;
+      var refreshBtn = base.querySelector('._refreshButton');
+      if (refreshBtn && lists.length > 1) {
+        refreshBtn.addEventListener('click', function(e){
+          e.preventDefault();
+          lists[current].style.display = 'none';
+          current = (current + 1) % lists.length;
+          lists[current].style.display = 'block';
+        });
+      }
+      var infoBtn   = base.querySelector('._rankingInfoButton');
+      var infoLayer = base.querySelector('._rankingInfoLayer');
+      var closeBtn  = base.querySelector('._rankingInfoCloseButton');
+      if (infoBtn && infoLayer) {
+        infoBtn.addEventListener('click', function(e){
+          e.stopPropagation();
+          infoLayer.style.display = infoLayer.style.display === 'none' ? 'block' : 'none';
+        });
+      }
+      if (closeBtn && infoLayer) {
+        closeBtn.addEventListener('click', function(){
+          infoLayer.style.display = 'none';
+        });
+      }
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAside);
+  } else {
+    initAside();
+  }
+})();
+</script>'''
 
-def _fix_naver_html(html: str) -> str:
+
+def _fix_naver_html(html: str, force_title: bool = True) -> str:
     """프록시된 HTML의 URL을 절대경로로 수정, 클릭 인터셉터 주입."""
+    _VALID_SIDS = {'001', '100', '101', '102', '103', '104', '105', '110'}
+
     # 1) 프로토콜 생략 URL(//...) → https://
     html = re.sub(r'((?:src|href|action|content)=["\'])//([^"\']+)',
                   lambda m: m.group(1) + 'https://' + m.group(2), html)
     html = re.sub(r"((?:src|href|action|content)=')//([^']+)",
                   lambda m: m.group(1) + 'https://' + m.group(2), html)
-    # 2) <head> 직후에 base href 삽입 → 상대경로 자동 해결
-    html = re.sub(r'(<head[^>]*>)',
-                  r'\1\n<base href="https://news.naver.com/" target="_self">',
-                  html, count=1, flags=re.IGNORECASE)
-    # 3) X-Frame-Options / CSP 메타태그 제거 (HTTP 헤더 차단 우회)
+
+    # 2) X-Frame-Options / CSP / meta-refresh 메타태그 제거
     html = re.sub(r'<meta[^>]+(?:x-frame-options|content-security-policy)[^>]*>',
                   '', html, flags=re.IGNORECASE)
-    # 4) 클릭 인터셉터 삽입: Naver 링크 → /proxy/page?url= 경유 (기사 페이지 iframe 차단 방지)
+    html = re.sub(r'<meta[^>]+http-equiv=["\']refresh["\'][^>]*>',
+                  '', html, flags=re.IGNORECASE)
+
+    # 3) Naver 스크립트 전체 제거
+    html = re.sub(r'<script\b[^>]*>.*?</script>', '', html,
+                  flags=re.DOTALL | re.IGNORECASE)
+    html = re.sub(r'<script\b[^>]*/>', '', html, flags=re.IGNORECASE)
+
+    # 4) 제목형 강제 CSS+JS 주입 (force_title 일 때만)
+    if force_title:
+        html = re.sub(r'</head>',
+                      lambda m: _NAVER_TITLE_INJECT + '\n</head>',
+                      html, count=1, flags=re.IGNORECASE)
+
+    # 5) 우리 서버 라우트로 교체 — base href 없이 iframe URL 기준으로 해석되도록
+    #    &amp; 인코딩 대응: [?&](?:amp;)? 패턴으로 &와 &amp; 모두 처리
+
+    #    (a) /main/list.naver?...&sid1=X  →  /lview/section/X (page 파라미터 보존)
+    def _sub_sid(m):
+        href_val = m.group(1)
+        if 'listType=' in href_val:
+            return m.group(0)   # listType 링크는 아래 5-c에서 처리
+        sid_m  = re.search(r'[?&](?:amp;)?sid1=(\d+)', href_val)
+        sid2_m = re.search(r'[?&](?:amp;)?sid2=(\d+)', href_val)
+        page_m = re.search(r'[?&](?:amp;)?page=(\d+)', href_val)
+        if sid_m and sid_m.group(1) in _VALID_SIDS:
+            base   = f'/lview/section/{sid_m.group(1)}'
+            params = []
+            if sid2_m:
+                params.append(f'sid2={sid2_m.group(1)}')
+            if page_m and page_m.group(1) != '1':
+                params.append(f'page={page_m.group(1)}')
+            qs = ('?' + '&'.join(params)) if params else ''
+            return f'href="{base}{qs}"'
+        if 'mode=LPOD' in href_val or 'isYeonhapFlash' in href_val:
+            return 'href="/lview/section/yonhap"'
+        return m.group(0)
+
+    html = re.sub(
+        r'href="((?:https?://(?:news|m)\.naver\.com)?/main/list\.naver[^"]*(?:sid1=\d+|mode=LPOD)[^"]*)"',
+        _sub_sid, html,
+    )
+
+    #    (b) /section/X  →  /lview/section/X  (신형 Naver URL)
+    html = re.sub(
+        r'href="/section/(\d+)"',
+        lambda m: f'href="/lview/section/{m.group(1)}"' if m.group(1) in _VALID_SIDS else m.group(0),
+        html,
+    )
+
+    #    (c) list.naver;jsessionid=...?...&listType=Y  →  /lview/section/X?listType=Y
+    #        &amp; 인코딩 대응 포함
+    def _sub_listtype(m):
+        href_val = m.group(1)
+        sid_m = re.search(r'[?&](?:amp;)?sid1=(\d+)', href_val)
+        lt_m  = re.search(r'[?&](?:amp;)?listType=([^&;"\']+)', href_val)
+        if not lt_m:
+            return m.group(0)
+        sid = sid_m.group(1) if sid_m else '001'
+        lt  = lt_m.group(1)
+        return f'href="/lview/section/{sid}?listType={lt}"'
+
+    html = re.sub(r'href="(list\.naver[^"]*listType[^"]*)"', _sub_listtype, html)
+
+    #    (c-ext) list.naver?...&sid1=X&sid2=Y (상대경로, listType 없음) → /lview/section/X?sid2=Y
+    #            세부 카테고리 링크 처리 (슬래시 없는 상대경로 대응)
+    def _sub_relative_sid(m):
+        href_val = m.group(1)
+        if 'listType=' in href_val:
+            return m.group(0)   # 이미 5-c에서 처리됨
+        sid_m  = re.search(r'[?&](?:amp;)?sid1=(\d+)', href_val)
+        sid2_m = re.search(r'[?&](?:amp;)?sid2=(\d+)', href_val)
+        page_m = re.search(r'[?&](?:amp;)?page=(\d+)', href_val)
+        if sid_m and sid_m.group(1) in _VALID_SIDS:
+            base   = f'/lview/section/{sid_m.group(1)}'
+            params = []
+            if sid2_m:
+                params.append(f'sid2={sid2_m.group(1)}')
+            if page_m and page_m.group(1) != '1':
+                params.append(f'page={page_m.group(1)}')
+            qs = ('?' + '&'.join(params)) if params else ''
+            return f'href="{base}{qs}"'
+        if 'mode=LPOD' in href_val or 'isYeonhapFlash' in href_val:
+            return 'href="/lview/section/yonhap"'
+        return m.group(0)
+
+    html = re.sub(
+        r'href="(list\.naver[^"]*(?:sid1=\d+|mode=LPOD)[^"]*)"',
+        _sub_relative_sid, html,
+    )
+
+    #    (d) href="/"  →  /proxy/naver
+    html = re.sub(r'href="/"', 'href="/proxy/naver"', html)
+
+    # 6) 나머지 Naver 상대경로(/...) → 절대 URL  — /lview/ /proxy/ 는 우리 서버이므로 제외
+    #    base href 를 쓰지 않으므로 CSS·이미지 경로를 직접 절대화해야 함
+    def _abs_naver(m):
+        attr_q = m.group(1)   # e.g. 'href="'
+        path   = m.group(2)   # e.g. '/news/img/icon.gif'
+        if path.startswith('/lview/') or path.startswith('/proxy/'):
+            return m.group(0)
+        return attr_q + 'https://news.naver.com' + path
+
+    html = re.sub(r'((?:href|src|action)=")(/[^"]+)', _abs_naver, html)
+    html = re.sub(r"((?:href|src|action)=')(/[^']+)",
+                  lambda m: m.group(1) + 'https://news.naver.com' + m.group(2)
+                  if not m.group(2).startswith('/lview/') and not m.group(2).startswith('/proxy/')
+                  else m.group(0), html)
+
+    # 7) 뷰타입 탭 활성 클래스 교체 — force_title 일 때만 제목형 강제
+    if force_title:
+        html = re.sub(r'\btit_off\b', 'tit_on', html)
+        html = re.sub(r'\bsum_on\b',  'sum_off', html)
+        html = re.sub(r'\bphoto_on\b', 'photo_off', html)
+        html = re.sub(r'\bnewsp_on\b', 'newsp_off', html)
+
+    # 8) 클릭 인터셉터 + aside 버튼 JS 삽입
+    inject = _PROXY_INTERCEPT_JS + '\n' + _NAVER_ASIDE_JS
     if re.search(r'</body>', html, re.IGNORECASE):
-        html = re.sub(r'(</body>)', _PROXY_INTERCEPT_JS + r'\n\1', html,
-                      count=1, flags=re.IGNORECASE)
+        html = re.sub(r'</body>',
+                      lambda m: inject + '\n</body>',
+                      html, count=1, flags=re.IGNORECASE)
     else:
-        html += _PROXY_INTERCEPT_JS
+        html += inject
     return html
 
 
@@ -907,7 +1502,7 @@ async def proxy_naver_aside():
 
     # 없거나 만료됐으면 새로 fetch
     try:
-        raw  = await asyncio.to_thread(_fetch_naver_raw, _NAVER_LIST_URL)
+        raw  = await _fetch_naver_raw(_NAVER_LIST_URL)
         html = await asyncio.to_thread(_extract_naver_aside_sync, raw)
         if html:
             _cache['aside_html'] = html
@@ -922,37 +1517,169 @@ async def proxy_naver_aside():
 async def proxy_naver(request: Request):
     """왼쪽 패널: 실제 네이버 뉴스 페이지를 서버 프록시로 렌더링.
     동시에 aside HTML을 추출해 캐시에 저장한다."""
-    if _cache['proxy_html'] and (time.time() - _cache['proxy_at']) < CACHE_TTL:
+    if _cache['proxy_html'] and (time.time() - _cache['proxy_at']) < _LVIEW_CACHE_TTL:
         return HTMLResponse(content=_cache['proxy_html'])
 
     try:
-        raw  = await asyncio.to_thread(_fetch_naver_raw, _NAVER_LIST_URL)
-        # aside 캐시가 비어 있으면 동시에 추출
+        raw  = await _fetch_naver_raw(_NAVER_LIST_URL_TITLE)
+        # aside 캐시가 비어 있으면 원본 URL로 추출
         if not _cache['aside_html']:
-            aside = await asyncio.to_thread(_extract_naver_aside_sync, raw)
+            raw_base = await _fetch_naver_raw(_NAVER_LIST_URL)
+            aside = await asyncio.to_thread(_extract_naver_aside_sync, raw_base)
             if aside:
                 _cache['aside_html'] = aside
                 _cache['aside_at']   = time.time()
-        html = _fix_naver_html(raw)
+        html = await asyncio.to_thread(_fix_naver_html, raw)   # 스레드풀: 이벤트 루프 비블로킹
         _cache['proxy_html'] = html
         _cache['proxy_at']   = time.time()
+        asyncio.create_task(asyncio.to_thread(_save_proxy_html_to_disk, html))  # 디스크 비동기 저장
         return HTMLResponse(content=html)
     except Exception as e:
-        print(f'[proxy] 네이버 직접 fetch 실패 ({e}) — 크롤러 캐시 fallback')
+        print(f'[proxy] 네이버 직접 fetch 실패 ({e}) - 크롤러 캐시 fallback')
         articles = _cache['articles']
         return templates.TemplateResponse(
             request=request,
             name='naver_news_left.html',
             context={
-                'news_list': articles[:30],
-                'loading':   len(articles) == 0,
-                'today':     _today_str(),
+                'news_list':    articles[:30],
+                'loading':      len(articles) == 0,
+                'today':        _today_str(),
+                'section_name': None,
+                'section_id':   None,
             },
         )
 
 
-_PAGE_CACHE_TTL = 180   # 기사 페이지 캐시 3분
+async def _precache_lview_listtypes(sid1: str, base_naver_url: str, current_lt: str):
+    """현재 섹션의 다른 뷰타입을 백그라운드 캐싱 — 탭 전환 속도 개선."""
+    for lt in ('title', 'summary', 'photo', 'paper'):
+        if lt == current_lt:
+            continue
+        ck = f'{sid1}:{lt}'
+        if ck in _lview_proxy_cache and (time.time() - _lview_proxy_cache[ck].get('at', 0)) < _LVIEW_CACHE_TTL:
+            continue
+        try:
+            url  = base_naver_url + f'&listType={lt}'
+            raw  = await _fetch_naver_raw(url)
+            html = await asyncio.to_thread(_fix_naver_html, raw, lt == 'title')  # 스레드풀
+            _lview_proxy_cache[ck] = {'html': html, 'at': time.time()}
+            print(f'[lview] [{sid1}:{lt}] 뷰타입 사전 캐싱 완료')
+        except Exception as e:
+            print(f'[lview] [{sid1}:{lt}] 사전 캐싱 실패: {e}')
+
+
+@app.get('/lview/section/{sid1}', response_class=HTMLResponse)
+async def lview_section(
+    request: Request,
+    sid1: str,
+    listType: str = Query(default=None),
+    sid2: str = Query(default=None),
+    page: int = Query(default=1, ge=1),
+):
+    """왼쪽 패널 전용: 실제 네이버 카테고리 섹션 페이지를 프록시로 렌더링."""
+    if sid1 not in SECTIONS and sid1 != 'yonhap' and sid1 != '001':
+        return RedirectResponse(url='/proxy/naver')
+
+    # listType 이 없거나 'title' 이면 제목형 강제, 그 외엔 네이버 원본 뷰 사용
+    force_title = (not listType) or (listType == 'title')
+
+    # 캐시 키: page=1 은 워밍업 캐시와 호환, page>1 은 별도 키
+    if page == 1:
+        cache_key_str = f'{sid1}:{sid2}:{listType or ""}' if sid2 else f'{sid1}:{listType or ""}'
+    else:
+        cache_key_str = f'{sid1}:{sid2}:{listType or ""}:p{page}' if sid2 else f'{sid1}:{listType or ""}:p{page}'
+
+    cached = _lview_proxy_cache.get(cache_key_str)
+    if cached and (time.time() - cached['at']) < _LVIEW_CACHE_TTL:
+        return HTMLResponse(content=cached['html'])
+
+    # 세부 카테고리(sid2): 메인 카테고리와 동일하게 Naver 프록시 HTML로 렌더링
+    # LS2D URL로 실제 Naver HTML fetch → _fix_naver_html 적용 → 캐시 저장
+    if sid2:
+        naver_sid2_url = (
+            f'https://news.naver.com/main/list.naver'
+            f'?mode=LS2D&mid=sec&sid1={sid1}&sid2={sid2}&listType=title'
+        )
+        if page > 1:
+            naver_sid2_url += f'&page={page}'
+        try:
+            raw  = await _fetch_naver_raw(naver_sid2_url)
+            html = await asyncio.to_thread(_fix_naver_html, raw, True)
+            _lview_proxy_cache[cache_key_str] = {'html': html, 'at': time.time()}
+            return HTMLResponse(content=html)
+        except Exception as _sid2_exc:
+            print(f'[lview] sid2={sid2} fetch/parse error: {type(_sid2_exc).__name__}: {_sid2_exc}')
+            # Naver fetch 실패 시 크롤러 캐시 fallback
+            sec_key      = f'{sid1}:{sid2}'
+            sec_cache    = _get_section_cache(sec_key)
+            section_info = SECTIONS.get(sid1, {})
+            section_name = section_info.get('name', '') if sid1 in SECTIONS else ''
+            sub_name_map = {str(s['sid2']): s['name'] for s in section_info.get('sub_categories', []) if s.get('sid2')}
+            active_sub_name = sub_name_map.get(str(sid2), '')
+            if (not sec_cache['articles']) or ((time.time() - sec_cache['fetched_at']) > CACHE_TTL):
+                if sec_key not in _section_crawling:
+                    base_url = f'https://news.naver.com/main/list.naver?mode=LS2D&mid=sec&sid1={sid1}&sid2={sid2}'
+                    asyncio.create_task(_run_section_crawl(sec_key, base_url))
+            return templates.TemplateResponse(
+                request=request,
+                name='naver_news_left.html',
+                context={
+                    'news_list':      sec_cache['articles'],
+                    'loading':        len(sec_cache['articles']) == 0,
+                    'today':          _today_str(),
+                    'section_name':   f'{section_name} · {active_sub_name}' if active_sub_name else section_name,
+                    'section_id':     sid1,
+                    'sub_categories': section_info.get('sub_categories', []),
+                    'active_sid2':    sid2,
+                },
+            )
+
+    if sid1 == 'yonhap':
+        naver_url = YONHAP_URL
+    else:
+        naver_url = CATEGORY_BASE_URLS.get(
+            sid1,
+            f'https://news.naver.com/main/list.naver?mode=LSD&mid=sec&sid1={sid1}',
+        )
+    # listType 명시 시 그대로 사용, 없으면 title 뷰(5개 묶음 구조) 기본 적용
+    effective_lt = listType if listType else 'title'
+    base_naver_url = naver_url
+    naver_url += f'&listType={effective_lt}'
+    if page > 1:
+        naver_url += f'&page={page}'
+
+    try:
+        raw  = await _fetch_naver_raw(naver_url)
+        html = await asyncio.to_thread(_fix_naver_html, raw, force_title)  # 스레드풀
+        _lview_proxy_cache[cache_key_str] = {'html': html, 'at': time.time()}
+        # 첫 페이지 방문 시 다른 뷰타입을 백그라운드에서 사전 캐싱 (탭 전환 속도 개선)
+        if page == 1:
+            asyncio.create_task(_precache_lview_listtypes(sid1, base_naver_url, effective_lt))
+        return HTMLResponse(content=html)
+    except Exception as e:
+        print(f'[lview] 네이버 직접 fetch 실패 ({e}) - 크롤러 캐시 fallback')
+        sec_key      = f'{sid1}:' if sid1 != 'yonhap' else 'yonhap'
+        sec_cache    = _get_section_cache(sec_key)
+        section_info = SECTIONS.get(sid1, {})
+        section_name = section_info.get('name', '연합뉴스 속보') if sid1 in SECTIONS else '연합뉴스 속보'
+        return templates.TemplateResponse(
+            request=request,
+            name='naver_news_left.html',
+            context={
+                'news_list':      sec_cache['articles'][:30],
+                'loading':        len(sec_cache['articles']) == 0,
+                'today':          _today_str(),
+                'section_name':   section_name,
+                'section_id':     sid1,
+                'sub_categories': section_info.get('sub_categories', []),
+                'active_sid2':    sid2,
+            },
+        )
+
+
+_PAGE_CACHE_TTL   = 180   # 기사 페이지 캐시 3분
 _page_cache: dict[str, dict] = {}  # {url: {'html': str, 'at': float}}
+_lview_proxy_cache: dict[str, dict] = {}  # {sid1: {'html': str, 'at': float}}
 
 @app.get('/proxy/page', response_class=HTMLResponse)
 async def proxy_page(url: str = Query(...)):
@@ -974,7 +1701,7 @@ async def proxy_page(url: str = Query(...)):
         return HTMLResponse(content=cached['html'])
 
     try:
-        raw  = await asyncio.to_thread(_fetch_naver_raw, url)
+        raw  = await _fetch_naver_raw(url)
         html = _fix_naver_html(raw)
         _page_cache[url] = {'html': html, 'at': time.time()}
         return HTMLResponse(content=html)

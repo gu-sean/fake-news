@@ -19,9 +19,9 @@
     table.container { width: 100%; border-collapse: collapse; }
     col.col_snb { width: 130px; }
     col.col_aside { width: 320px; }
-    td.snb { width: 130px; vertical-align: top; padding: 20px 20px 30px 0; }
+    td.snb { width: 130px; vertical-align: top; padding: 20px 20px 30px 0; border-right: 1px solid #e5e5e5; }
     td.content { vertical-align: top; padding: 20px 20px 30px; }
-    td.aside { width: 320px; vertical-align: top; padding: 20px 0 30px 20px; }
+    td.aside { width: 320px; vertical-align: top; padding: 20px 0 30px 20px; border-left: 1px solid #e5e5e5; }
 
     /* ── SNB (왼쪽 카테고리 메뉴) ────────────────────── */
     div#snb h2 { font-size: 14px; font-weight: bold; margin: 0 0 8px; }
@@ -31,7 +31,7 @@
     div#snb .nav li a:hover { color: #03c75a; text-decoration: none; }
     /* ── type02 기사 목록 ────────────────────────────── */
     ul.type02 { list-style: none; margin: 0 0 16px; padding: 0; }
-    ul.type02 > li { padding: 7px 0; border-bottom: 1px solid #eaebf0; font-size: 13px; line-height: 1.5; }
+    ul.type02 > li { padding: 7px 0; border-bottom: none; font-size: 13px; line-height: 1.5; }
     ul.type02 > li > a { color: #1a1a1a; }
     ul.type02 > li > a:hover { color: #0069c0; text-decoration: underline; }
     ul.type02 .icon_photo { display: none; }
@@ -65,13 +65,15 @@
     .ai_badge.warning { background: #fff8e6; color: #e07b00; border: 1px solid #ffd98a; }
     .ai_badge.danger  { background: #fff1f0; color: #e03131; border: 1px solid #ffb3b3; }
 
+
     /* ── aside (오른쪽 사이드바) ─────────────────────── */
     td.aside { height: 1px; }                        /* 테이블 셀 100% height 트릭 */
     div.aside { height: 100%; display: flex; flex-direction: column; }
     div.aside > .section { margin-bottom: 20px; }
     div.aside h4 { font-size: 14px; font-weight: bold; margin: 0 0 10px; }
     .section_sub_txt { font-size: 11px; color: #999; margin: -6px 0 10px; }
-    .section_info_icon { background: none; border: 1px solid #ccc; border-radius: 10px; padding: 2px 5px; font-size: 10px; cursor: pointer; vertical-align: middle; white-space: nowrap; line-height: 1.2; }
+    .section_info_icon { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; background: none; border: 1px solid #aaa; border-radius: 50%; font-size: 10px; font-style: italic; font-weight: bold; cursor: pointer; color: #777; line-height: 1; flex-shrink: 0; }
+    .section_info_icon:hover { border-color: #555; color: #333; }
     .section_info_layer { background: #fff; border: 1px solid #ccc; padding: 8px 10px; font-size: 11px; color: #555; margin-bottom: 8px; }
     .section_list_ranking_press { list-style: none; margin: 0; padding: 0; }
     .section_list_ranking_press li { display: flex; gap: 8px; padding: 8px 0; border-bottom: 1px solid #f4f4f4; align-items: flex-start; }
@@ -171,16 +173,76 @@
     /* ── SNB 날짜/링크 유틸리티 바 ───────────────────── */
     .snb_util_bar {
         display: flex; justify-content: space-between; align-items: center;
-        padding: 8px 0 9px; border-bottom: 1px solid #e5e5e5;
+        padding: 20px 0 9px; border-bottom: 1px solid #e5e5e5;
         margin-bottom: 0; font-size: 11px; }
-    .snb_util_date { color: #555; white-space: nowrap; }
+    .snb_util_date { color: #333; white-space: nowrap; font-weight: bold; }
     .snb_util_links { display: flex; align-items: center; white-space: nowrap; gap: 0; }
     .snb_util_links a { color: #555; font-size: 11px; padding: 0 5px; }
     .snb_util_links a:hover { color: #03c75a; text-decoration: none; }
     .snb_util_links .ubar { color: #d0d0d0; font-size: 10px; }
 
     /* ── SNB 속보 아래 구분선 ─────────────────────────── */
-    .snb_divider { border: none; border-top: 1px solid #e5e5e5; margin: 6px 0 10px; }
+    .snb_divider { display: block; height: 1px; background: #e5e5e5; margin: 6px 0 10px; }
+
+    /* ── type02 5개묶음 구분선 ──────────────────────── */
+    .type02_divider { display: block; height: 1px; background: #e5e5e5; margin: 8px 0; }
+
+    /* ── AI 필터 탭 ─────────────────────────────────── */
+    .ai_filter_tabs { display: flex; gap: 0; margin-bottom: 0; border-bottom: none; }
+    .ai_filter_tab {
+        padding: 6px 14px; font-size: 12px; color: #555; cursor: pointer;
+        border: none; background: none; border-bottom: 2px solid transparent;
+        margin-bottom: -2px; font-family: inherit; text-decoration: none; display: inline-block; }
+    .ai_filter_tab:hover { color: #0069c0; }
+    .ai_filter_tab.active { color: #0069c0; font-weight: bold; border-bottom: 2px solid #0069c0; }
+    .ai_filter_empty { padding: 30px 0; text-align: center; font-size: 13px; color: #999; display: none; }
+
+    /* ── 가짜 주요 5대 패턴 사이드바 ──────────────────── */
+    .dvl_pattern_list { list-style: none; margin: 0; padding: 0; }
+    .dvl_pattern_row {
+        border-bottom: 1px solid #f4f4f4; }
+    .dvl_pattern_row:last-child { border-bottom: none; }
+    .dvl_pattern_row a {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 7px 6px; text-decoration: none;
+        border-radius: 4px; transition: background .12s; }
+    .dvl_pattern_row a:hover { background: #f5f7ff; text-decoration: none; }
+    .dvl_pattern_name { font-size: 12px; color: #333; }
+    .dvl_pattern_count {
+        font-weight: bold; color: #c0392b;
+        background: #fff1f0; border: 1px solid #ffb3b3;
+        border-radius: 10px; padding: 1px 8px; font-size: 11px; white-space: nowrap; }
+    .dvl_pattern_row.dvl_active a { background: #fff1f0; }
+    .dvl_pattern_row.dvl_active .dvl_pattern_name { color: #c0392b; font-weight: bold; }
+    .dvl_pattern_row.dvl_active .dvl_pattern_count {
+        background: #c0392b; color: #fff; border-color: #c0392b; }
+
+    /* ── 필터탭 + 뷰타입 통합 1줄 바 ──────────────────── */
+    .filter_view_bar {
+        display: flex; align-items: center; justify-content: space-between;
+        border-bottom: 2px solid #e5e5e5;
+        margin-top: 10px;       /* 위쪽 탭(세부 카테고리/AI 대시보드)과 구분 */
+        margin-bottom: 10px; }
+    .filter_view_bar .view_type {
+        padding-bottom: 6px;
+        margin-left: auto;      /* 필터 탭 없을 때도 오른쪽 정렬 유지 */
+    }
+
+    /* ── AI 탐지 요약 배너 ───────────────────────────── */
+    .ai_summary_bar {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 7px 10px; margin-bottom: 10px;
+        background: #f4f8ff; border: 1px solid #d0dff7;
+        border-radius: 4px; font-size: 12px; color: #333; }
+    .ai_summary_label { font-weight: bold; color: #3f63bf; white-space: nowrap; }
+    .ai_summary_stats { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .ai_summary_stats strong { font-weight: bold; }
+    .ai_summary_divider { color: #ccc; margin: 0 2px; }
+    .ai_summary_pct {
+        display: inline-block; padding: 1px 6px;
+        background: #ffe8e8; color: #c0392b;
+        border: 1px solid #f5b7b1; border-radius: 10px;
+        font-size: 11px; font-weight: bold; }
 
     /* ── 모델 선택 드롭다운 ──────────────────────────── */
     /* 버튼: GNB 파란 배경(#3f63bf)에 자연스럽게 녹아드는 투명 스타일 */
@@ -271,6 +333,17 @@
 
     .model_select_menu li + li {
         border-top: 1px solid #f0f0f0; }
+
+    /* 준비 중 항목 — 클릭 불가, 흐리게 */
+    .model_select_menu li a.is_disabled {
+        color: #bbb; cursor: not-allowed; pointer-events: none; }
+    .model_select_menu li a.is_disabled::before { background: #ddd; }
+    .model_select_menu li a.is_disabled:hover { background: transparent; color: #bbb; }
+    .model_select_menu li a.is_disabled .model_coming_soon {
+        margin-left: auto;
+        font-size: 10px; color: #aaa;
+        background: #f5f5f5; border: 1px solid #e0e0e0;
+        border-radius: 3px; padding: 1px 4px; }
   </style>
 </head>
 <body>
@@ -328,9 +401,10 @@
                 <span class="model_select_arrow">▾</span>
               </button>
               <ul class="model_select_menu" id="modelSelectMenu">
-                <li><a href="javascript:;" class="model_select_item" data-model="logistic">로지스틱 회귀 모델</a></li>
-                <li><a href="javascript:;" class="model_select_item" data-model="svm">SVM 모델</a></li>
                 <li><a href="javascript:;" class="model_select_item" data-model="xgboost">XGBoost 모델</a></li>
+                <li><a href="javascript:;" class="model_select_item" data-model="logistic">로지스틱 회귀</a></li>
+                <li><a href="javascript:;" class="model_select_item" data-model="svm">SVM</a></li>
+                <li><a href="javascript:;" class="model_select_item" data-model="ensemble">앙상블 (NB+SVM+LR)</a></li>
               </ul>
             </div>
             <div class="Ngnb_tool">
@@ -394,7 +468,7 @@
             <div id="snb" class="snb">
 
 <h2 class="h"><a href="/view" class="nclicks(lmn_fla.home){% if not section_id %} snb_active{% endif %}">속보</a></h2>
-<hr class="snb_divider">
+<div class="snb_divider"></div>
 <ul class="nav">
 <li><a href="/rview/section/100" class="snb_s{% if section_id == '100' %} snb_active{% endif %}">정치</a></li>
 <li><a href="/rview/section/101" class="snb_s2{% if section_id == '101' %} snb_active{% endif %}">경제</a></li>
@@ -415,6 +489,7 @@
                 <div class="list_header newsflash_header2">
                     <h3>{{ section_name }} 속보</h3>
                 </div>
+                {# ━━━ 세부 카테고리 탭 ━━━ #}
                 {% if sub_categories %}
                 <div class="topbox_type1">
                     <ul class="massmedia">
@@ -430,24 +505,68 @@
                     </ul>
                 </div>
                 {% endif %}
-                <div class="newsflash_header3">
-                    <div class="view_type">
-                        <a href="{{ nav_url_base }}?view=paper{{ nav_extra_params }}" class="{% if view_type == 'paper' %}newsp_on{% else %}newsp{% endif %} nclicks(fls.vtype)" title="신문에 게재된 기사만 보실 수 있습니다.">신문게재기사만</a><span class="bar">|</span>
-                        <a href="{{ nav_url_base }}?view=title{{ nav_extra_params }}" class="{% if view_type == 'title' %}tit_on{% else %}tit_off{% endif %} nclicks(fls.vtype)">제목형</a>
-                        <a href="{{ nav_url_base }}?view=summary{{ nav_extra_params }}" class="{% if view_type == 'summary' %}sum_on{% else %}sum_off{% endif %} nclicks(fls.vtype)">요약형</a>
-                        <a href="{{ nav_url_base }}?view=photo{{ nav_extra_params }}" class="{% if view_type == 'photo' %}photo_on{% else %}photo_off{% endif %} nclicks(fls.vtype)">포토만</a>
-                    </div>
+                {# ━━━ AI 탐지 대시보드 ━━━ #}
+                {% if show_badges and total_count > 0 %}
+                <div class="ai_summary_bar">
+                  <span class="ai_summary_label">🤖 AI 탐지 현황</span>
+                  <span class="ai_summary_stats">
+                    전체 <strong>{{ total_count }}건</strong>
+                    <span class="ai_summary_divider">|</span>
+                    <span class="ai_badge safe">진짜</span> <strong>{{ real_count }}건</strong>
+                    <span class="ai_summary_divider">|</span>
+                    <span class="ai_badge danger">가짜 의심</span> <strong>{{ fake_count }}건</strong>
+                  </span>
+                </div>
+                {% endif %}
+                {# ━━━ 필터 탭 + 뷰타입 1줄 통합 바 ━━━ #}
+                <div class="filter_view_bar">
+                  {% if show_badges and total_count > 0 %}
+                  <div class="ai_filter_tabs">
+                    <a href="{{ nav_url_base }}?page=1&amp;view={{ view_type }}{% if active_sid2 %}&amp;sid2={{ active_sid2 }}{% endif %}&amp;filter=all{% if active_model %}&amp;model={{ active_model }}{% endif %}"  class="ai_filter_tab {% if active_filter == 'all' %}active{% endif %}">전체</a>
+                    <a href="{{ nav_url_base }}?page=1&amp;view={{ view_type }}{% if active_sid2 %}&amp;sid2={{ active_sid2 }}{% endif %}&amp;filter=real{% if active_model %}&amp;model={{ active_model }}{% endif %}" class="ai_filter_tab {% if active_filter == 'real' %}active{% endif %}">진짜만</a>
+                    <a href="{{ nav_url_base }}?page=1&amp;view={{ view_type }}{% if active_sid2 %}&amp;sid2={{ active_sid2 }}{% endif %}&amp;filter=fake{% if active_model %}&amp;model={{ active_model }}{% endif %}" class="ai_filter_tab {% if active_filter == 'fake' %}active{% endif %}">가짜 의심만</a>
+                  </div>
+                  {% endif %}
+                  <div class="view_type">
+                    <a href="{{ nav_url_base }}?view=paper{{ nav_extra_params }}" class="{% if view_type == 'paper' %}newsp_on{% else %}newsp{% endif %}" title="신문게재기사만">신문게재기사만</a><span class="bar">|</span>
+                    <a href="{{ nav_url_base }}?view=title{{ nav_extra_params }}" class="{% if view_type == 'title' %}tit_on{% else %}tit_off{% endif %}">제목형</a>
+                    <a href="{{ nav_url_base }}?view=summary{{ nav_extra_params }}" class="{% if view_type == 'summary' %}sum_on{% else %}sum_off{% endif %}">요약형</a>
+                    <a href="{{ nav_url_base }}?view=photo{{ nav_extra_params }}" class="{% if view_type == 'photo' %}photo_on{% else %}photo_off{% endif %}">포토만</a>
+                  </div>
                 </div>
                 {% else %}
                 {# ━━━ 속보 메인 헤더 ━━━ #}
                 <div class="list_header newsflash_header">
-                    <h3>전체</h3>
-                    <div class="view_type">
-                        <a href="/view?page=1&amp;view=paper" class="{% if view_type == 'paper' %}newsp_on{% else %}newsp{% endif %} nclicks(fls.vtype)" title="신문에 게재된 기사만 보실 수 있습니다.">신문게재기사만</a><span class="bar">|</span>
-                        <a href="/view?page=1&amp;view=title" class="{% if view_type == 'title' %}tit_on{% else %}tit_off{% endif %} nclicks(fls.vtype)">제목형</a>
-                        <a href="/view?page=1&amp;view=summary" class="{% if view_type == 'summary' %}sum_on{% else %}sum_off{% endif %} nclicks(fls.vtype)">요약형</a>
-                        <a href="/view?page=1&amp;view=photo" class="{% if view_type == 'photo' %}photo_on{% else %}photo_off{% endif %} nclicks(fls.vtype)">포토만</a>
-                    </div>
+                    <h3>{% if dvl_filter_name is defined and dvl_filter_name %}{{ dvl_filter_name }} 패턴{% else %}전체{% endif %}</h3>
+                </div>
+                {# ━━━ AI 탐지 대시보드 ━━━ #}
+                {% if show_badges and total_count > 0 %}
+                <div class="ai_summary_bar">
+                  <span class="ai_summary_label">🤖 AI 탐지 현황</span>
+                  <span class="ai_summary_stats">
+                    전체 <strong>{{ total_count }}건</strong>
+                    <span class="ai_summary_divider">|</span>
+                    <span class="ai_badge safe">진짜</span> <strong>{{ real_count }}건</strong>
+                    <span class="ai_summary_divider">|</span>
+                    <span class="ai_badge danger">가짜 의심</span> <strong>{{ fake_count }}건</strong>
+                  </span>
+                </div>
+                {% endif %}
+                {# ━━━ 필터 탭 + 뷰타입 1줄 통합 바 ━━━ #}
+                <div class="filter_view_bar">
+                  {% if show_badges and total_count > 0 %}
+                  <div class="ai_filter_tabs">
+                    <a href="/view?page=1&amp;view={{ view_type }}&amp;filter=all{% if active_model %}&amp;model={{ active_model }}{% endif %}"  class="ai_filter_tab {% if active_filter == 'all' %}active{% endif %}">전체</a>
+                    <a href="/view?page=1&amp;view={{ view_type }}&amp;filter=real{% if active_model %}&amp;model={{ active_model }}{% endif %}" class="ai_filter_tab {% if active_filter == 'real' %}active{% endif %}">진짜만</a>
+                    <a href="/view?page=1&amp;view={{ view_type }}&amp;filter=fake{% if active_model %}&amp;model={{ active_model }}{% endif %}" class="ai_filter_tab {% if active_filter == 'fake' %}active{% endif %}">가짜 의심만</a>
+                  </div>
+                  {% endif %}
+                  <div class="view_type">
+                    <a href="/view?page=1&amp;view=paper{{ nav_extra_params }}" class="{% if view_type == 'paper' %}newsp_on{% else %}newsp{% endif %}" title="신문게재기사만">신문게재기사만</a><span class="bar">|</span>
+                    <a href="/view?page=1&amp;view=title{{ nav_extra_params }}" class="{% if view_type == 'title' %}tit_on{% else %}tit_off{% endif %}">제목형</a>
+                    <a href="/view?page=1&amp;view=summary{{ nav_extra_params }}" class="{% if view_type == 'summary' %}sum_on{% else %}sum_off{% endif %}">요약형</a>
+                    <a href="/view?page=1&amp;view=photo{{ nav_extra_params }}" class="{% if view_type == 'photo' %}photo_on{% else %}photo_off{% endif %}">포토만</a>
+                  </div>
                 </div>
                 {% endif %}
 
@@ -484,19 +603,22 @@
                       {% endif %}
                     {% endmacro %}
 
-                    {# ━━━━━━━ 제목형 ━━━━━━━ #}
+                    {# ━━━━━━━ 제목형 — 5개씩 묶음 ━━━━━━━ #}
                     {% if view_type == 'title' %}
+                    {% for group in news_list | batch(5) %}
                     <ul class="type02">
-                    {% for article in news_list %}
+                    {% for article in group %}
                     {% set s = article.fake_score %}
-                    <li{% if s is not none and s >= 50 %} class="is_danger"{% endif %}>
-                        <a href="{{ article.url }}" class="nclicks(fls.list)">{{ article.title }}</a>
-                        {{ ai_badge(s) }}
+                    <li{% if show_badges and s is not none and s >= 50 %} class="is_danger"{% endif %}>
+                        <a href="{{ article.url }}" class="nclicks(fls.list)" {% if article.url and article.url != '#' %}target="_blank"{% endif %}>{{ article.title }}</a>
+                        {% if show_badges %}{{ ai_badge(s) }}{% endif %}
                         <span class="writing">{{ article.press }}</span>
                         <span class="date is_new">{{ article.time }}</span>
                     </li>
                     {% endfor %}
                     </ul>
+                    {% if not loop.last %}<div class="type02_divider"></div>{% endif %}
+                    {% endfor %}
 
                     {# ━━━━━━━ 요약형 / 신문게재기사만 (같은 레이아웃) ━━━━━━━ #}
                     {% elif view_type == 'summary' or view_type == 'paper' %}
@@ -504,16 +626,16 @@
                     <ul class="type06_headline">
                     {% for article in news_list[:10] %}
                     {% set s = article.fake_score %}
-                    <li{% if s is not none and s >= 50 %} class="is_danger"{% endif %}>
+                    <li{% if show_badges and s is not none and s >= 50 %} class="is_danger"{% endif %}>
                         {% if article.image_url %}
-                        <a href="{{ article.url }}" class="thumb_area">
+                        <a href="{{ article.url }}" class="thumb_area" target="_blank">
                             <img src="{{ article.image_url }}" alt="{{ article.title }}"
                                  onerror="this.src='https://ssl.pstatic.net/static.news/image/news/2009/noimage_106x72.png';">
                         </a>
                         {% endif %}
                         <div class="text_area">
-                            <a href="{{ article.url }}" class="art_tit_h">{{ article.title }}</a>
-                            {{ ai_badge(s) }}
+                            <a href="{{ article.url }}" class="art_tit_h" target="_blank">{{ article.title }}</a>
+                            {% if show_badges %}{{ ai_badge(s) }}{% endif %}
                             {% if article.summary %}
                             <span class="lede">{{ article.summary }}</span>
                             {% endif %}
@@ -530,16 +652,16 @@
                     <ul class="type06">
                     {% for article in news_list[10:] %}
                     {% set s = article.fake_score %}
-                    <li{% if s is not none and s >= 50 %} class="is_danger"{% endif %}>
+                    <li{% if show_badges and s is not none and s >= 50 %} class="is_danger"{% endif %}>
                         {% if article.image_url %}
-                        <a href="{{ article.url }}" class="thumb_area">
+                        <a href="{{ article.url }}" class="thumb_area" target="_blank">
                             <img src="{{ article.image_url }}" alt="{{ article.title }}"
                                  onerror="this.src='https://ssl.pstatic.net/static.news/image/news/2009/noimage_106x72.png';">
                         </a>
                         {% endif %}
                         <div class="text_area">
-                            <a href="{{ article.url }}" class="art_tit_n">{{ article.title }}</a>
-                            {{ ai_badge(s) }}
+                            <a href="{{ article.url }}" class="art_tit_n" target="_blank">{{ article.title }}</a>
+                            {% if show_badges %}{{ ai_badge(s) }}{% endif %}
                             {% if article.summary %}
                             <span class="lede">{{ article.summary }}</span>
                             {% endif %}
@@ -565,7 +687,7 @@
                             {% for article in row %}
                             <td>
                             {% if article %}
-                                <a href="{{ article.url }}" class="nclicks(fls.list)">
+                                <a href="{{ article.url }}" class="nclicks(fls.list)" target="_blank">
                                     <img src="{{ article.image_url or 'https://ssl.pstatic.net/static.news/image/news/2009/noimage_120.gif' }}"
                                          alt="{{ article.title }}"
                                          onerror="this.src='https://ssl.pstatic.net/static.news/image/news/2009/noimage_120.gif';">
@@ -578,7 +700,7 @@
                             {% for article in row %}
                             <td>
                             {% if article %}
-                                <a href="{{ article.url }}" class="nclicks(fls.list)">{{ article.title }}</a>
+                                <a href="{{ article.url }}" class="nclicks(fls.list)" target="_blank">{{ article.title }}</a>
                             {% endif %}
                             </td>
                             {% endfor %}
@@ -649,12 +771,14 @@
             <div class="aside">
 
 <div class="section _officeTopRanking1087479">
-    <h4>언론사별 가장 많이 본 뉴스</h4>
-    <div style="display:flex; align-items:center; gap:6px; margin-bottom:10px;">
-        <button type="button" class="section_info_icon nclicks('rig.renws2i') _rankingInfoButton">안내</button>
-        <span class="section_sub_txt" style="margin:0; font-size:11px; color:#999;">오전 10시~오전 11시까지 집계한 결과입니다.</span>
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+        <h4 style="margin:0; display:flex; align-items:center; gap:4px;">
+            언론사별 가장 많이 본 뉴스
+            <button type="button" class="section_info_icon _rankingInfoButton">i</button>
+        </h4>
+        <button type="button" class="refresh_button _refreshButton" style="display:inline-block; width:auto; padding:2px 8px; margin-top:0;">더보기</button>
     </div>
-    <div class="section_info_layer _rankingInfoLayer" style="display: none">각 언론사의 가장 많이 본 기사 1건을 제공합니다. <button type="button" class="section_info_layer_close _rankingInfoCloseButton nclicks('rig.renws2x')"><span>닫기</span></button></div>
+    <div class="section_info_layer _rankingInfoLayer" style="display: none">각 언론사의 가장 많이 본 기사 1건을 제공합니다. <button type="button" class="section_info_layer_close _rankingInfoCloseButton"><span>X</span></button></div>
 
     <ul class="section_list_ranking_press _rankingList" id="_rankingList0" style="display: block">
             <li>
@@ -724,23 +848,39 @@
             <li><a href="https://n.news.naver.com/mnews/ranking/article/029/0003028117?ntype=RANKING&amp;sid=001" class="ranking_thumb" tabindex="-1" aria-hidden="true"><img src="https://mimgnews.pstatic.net/image/origin/029/2026/05/22/3028117.jpg?type=nf88_60" width="88" height="60" alt="" onerror="this.src='https://ssl.pstatic.net/static.news/image/news/errorimage/noimage_88x60.png';"></a><div class="list_text_wrap"><div class="list_text"><div class="list_text_inner"><a href="https://n.news.naver.com/mnews/ranking/article/029/0003028117?ntype=RANKING&amp;sid=001" class="list_tit">유승준 "한국 오고싶다"…법무부, 병역면탈자 입국금지 법적 …</a><a class="list_press" target="_blank" href="https://news.naver.com/main/ranking/office.naver?officeId=029"><span class="list_press_thumb"><img src="https://mimgnews.pstatic.net/image/upload/office_logo/029/2025/04/14/logo_029_100_20250414154305.png" width="16" height="16" alt=""></span>디지털타임스</a></div></div></div></li>
             <li><a href="https://n.news.naver.com/mnews/ranking/article/001/0016095001?ntype=RANKING&amp;sid=001" class="ranking_thumb" tabindex="-1" aria-hidden="true"><img src="https://mimgnews.pstatic.net/image/origin/001/2026/05/23/16095001.jpg?type=nf88_60" width="88" height="60" alt="" onerror="this.src='https://ssl.pstatic.net/static.news/image/news/errorimage/noimage_88x60.png';"></a><div class="list_text_wrap"><div class="list_text"><div class="list_text_inner"><a href="https://n.news.naver.com/mnews/ranking/article/001/0016095001?ntype=RANKING&amp;sid=001" class="list_tit">[샷!] 완벽한 금수저 가족의 투자 사기</a><a class="list_press" target="_blank" href="https://news.naver.com/main/ranking/office.naver?officeId=001"><span class="list_press_thumb"><img src="https://mimgnews.pstatic.net/image/upload/office_logo/001/2025/03/07/logo_001_100_20250307145612.png" width="16" height="16" alt=""></span>연합뉴스</a></div></div></div></li>
     </ul>
-    <button type="button" class="refresh_button nclicks('rig.renws2new') _refreshButton">더보기</button>
 </div>
 <script>
-/* 언론사별 랭킹 더보기 — 순수 JS (jindo 대체) */
 (function () {
     window.addEventListener('load', function () {
         var base = document.querySelector('._officeTopRanking1087479');
         if (!base) return;
         var lists   = base.querySelectorAll('._rankingList');
-        var btn     = base.querySelector('._refreshButton');
         var current = 0;
-        if (btn && lists.length > 1) {
-            btn.addEventListener('click', function (e) {
+
+        /* 더보기 버튼 → 다음 5개 랭킹으로 순환 */
+        var refreshBtn = base.querySelector('._refreshButton');
+        if (refreshBtn && lists.length > 1) {
+            refreshBtn.addEventListener('click', function (e) {
                 e.preventDefault();
                 lists[current].style.display = 'none';
                 current = (current + 1) % lists.length;
                 lists[current].style.display = 'block';
+            });
+        }
+
+        /* i 버튼 → 안내 레이어 토글 */
+        var infoBtn   = base.querySelector('._rankingInfoButton');
+        var infoLayer = base.querySelector('._rankingInfoLayer');
+        var closeBtn  = base.querySelector('._rankingInfoCloseButton');
+        if (infoBtn && infoLayer) {
+            infoBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                infoLayer.style.display = infoLayer.style.display === 'none' ? 'block' : 'none';
+            });
+        }
+        if (closeBtn && infoLayer) {
+            closeBtn.addEventListener('click', function () {
+                infoLayer.style.display = 'none';
             });
         }
     });
@@ -757,6 +897,7 @@
             <li><a href="https://n.news.naver.com/mnews/article/032/0003447382?sid=104" class="nclicks(rig.secteco)">이란 매체 "미·이란, 메시지 교환 중"···농축 우라늄 문제는 여전히 쟁점</a></li>
             <li><a href="https://n.news.naver.com/mnews/article/014/0005525465?sid=101" class="nclicks(rig.secteco)">다우지수, 이틀 연속 사상 최고…암 홀딩스, 주간 47% 폭등[뉴욕증시]</a></li>
         </ul>
+        <div class="type02_divider"></div>
         <ul class="list_txt">
             <li><a href="https://n.news.naver.com/mnews/article/081/0003646266?sid=101" class="nclicks(rig.secteco)">스타벅스 불매 일파만파…무신사는 박종철센터 찾아 다시 사과</a></li>
             <li><a href="https://n.news.naver.com/mnews/article/018/0006287933?sid=101" class="nclicks(rig.secteco)">소비자단체 "스타벅스의 진정한 사과는 '조건없는' 환불"</a></li>
@@ -764,30 +905,38 @@
             <li><a href="https://n.news.naver.com/mnews/article/018/0006287594?sid=105" class="nclicks(rig.secteco)">아이진, 한타바이러스 백신 과제 선정에 '上'…녹십자MS 들썩</a></li>
             <li><a href="https://n.news.naver.com/mnews/article/092/0002423967?sid=105" class="nclicks(rig.secteco)">낙하 96회·버튼 1만번...샥즈가 품질을 증명하는 법</a></li>
         </ul>
+        <div class="type02_divider"></div>
+        <ul class="list_txt">
+            <li><a href="https://n.news.naver.com/mnews/article/056/0012186855?sid=105" class="nclicks(rig.secteco)">삼전·닉스의 진짜 질문, '공돌이 부자' 허할 것인가</a></li>
+            <li><a href="https://n.news.naver.com/mnews/article/025/0003525270?sid=101" class="nclicks(rig.secteco)">"뭐하자는 겁니까!" 노동장관, 삼전 노사 협상 중 버럭한 이유</a></li>
+            <li><a href="https://n.news.naver.com/mnews/article/015/0005290408?sid=101" class="nclicks(rig.secteco)">자식 14명 키운 '평생 무주택자'…월세 내다가 파산한 비결</a></li>
+            <li><a href="https://n.news.naver.com/mnews/article/032/0003447509?sid=102" class="nclicks(rig.secteco)">강남 정신과 의사 "강남 환자 99.9%가 아무도 못 믿어"</a></li>
+            <li><a href="https://n.news.naver.com/mnews/article/001/0016095001?sid=104" class="nclicks(rig.secteco)">[샷!] 완벽한 금수저 가족의 투자 사기</a></li>
+        </ul>
     </div>
 </div>
 
-<!-- ── AI 가짜뉴스 탐지 통계 ── -->
-<div class="ai_stat_box">
-    <h4>🤖 AI 가짜뉴스 탐지 현황</h4>
-    <div class="ai_stat_row">
-        <span>전체 기사</span><strong>{{ all_articles | length }}건</strong>
-    </div>
-    {% if all_articles | selectattr('fake_score', 'ne', none) | list | length > 0 %}
-        {% set fake_cnt = all_articles | selectattr('fake_score', 'ne', none) | selectattr('fake_score', 'ge', 50) | list | length %}
-        {% set real_cnt = all_articles | selectattr('fake_score', 'ne', none) | selectattr('fake_score', 'lt', 50) | list | length %}
-        <div class="ai_stat_row">
-            <span><span class="ai_badge safe">진짜</span> 정상 기사</span><strong>{{ real_cnt }}건</strong>
-        </div>
-        <div class="ai_stat_row">
-            <span><span class="ai_badge danger">가짜</span> 가짜뉴스 의심</span><strong>{{ fake_cnt }}건</strong>
-        </div>
-    {% else %}
-        <div class="ai_stat_note">탐지 결과를 불러오는 중입니다.</div>
-    {% endif %}
-    <div class="ai_stat_note">
-    </div>
-</div>
+
+            {% if show_badges and dvl_counts is defined and dvl_counts %}
+            <div class="section" style="margin-top:20px;">
+                <h4>가짜 주요 5대 패턴</h4>
+                <ul class="dvl_pattern_list">
+                {% for name, count, fkey in dvl_counts %}
+                    <li class="dvl_pattern_row{% if active_filter == fkey %} dvl_active{% endif %}">
+                        <a href="/view?page=1&amp;view={{ view_type }}&amp;filter={{ fkey }}{% if active_model %}&amp;model={{ active_model }}{% endif %}">
+                            <span class="dvl_pattern_name">{{ name }}</span>
+                            <span class="dvl_pattern_count">{{ count }}건</span>
+                        </a>
+                    </li>
+                {% endfor %}
+                </ul>
+                {% if active_filter in ['stat_distortion','causal_error','emotional_provocation','source_lack','img_mismatch'] %}
+                <div style="margin-top:6px; text-align:right;">
+                    <a href="/view?page=1&amp;view={{ view_type }}{% if active_model %}&amp;model={{ active_model }}{% endif %}" style="font-size:11px; color:#888;">전체 보기 ×</a>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
 
             </div>
         </td>
@@ -827,9 +976,10 @@
 
   /* 모델 이름 매핑 */
   var MODEL_NAMES = {
+    xgboost:  'XGBoost 모델',
     logistic: '로지스틱 회귀 모델',
     svm:      'SVM 모델',
-    xgboost:  'XGBoost 모델'
+    ensemble: '앙상블 모델 (NB+SVM+LR)'
   };
 
   /* 현재 URL 파라미터에서 선택된 모델 읽기 */
@@ -855,10 +1005,11 @@
     btn.classList.toggle('is_open', !open);
   });
 
-  /* 메뉴 항목 클릭 → URL 파라미터 변경 후 이동 */
+  /* 메뉴 항목 클릭 → 비활성 항목 무시, 활성 항목만 URL 이동 */
   menu.querySelectorAll('.model_select_item').forEach(function (item) {
     item.addEventListener('click', function (e) {
       e.preventDefault();
+      if (this.classList.contains('is_disabled')) return;
       var model = this.getAttribute('data-model');
       var url   = new URL(window.location.href);
       url.searchParams.set('model', model);
@@ -874,6 +1025,29 @@
 
   /* 메뉴 내부 클릭이 외부 클릭 이벤트로 버블링되지 않도록 */
   wrap.addEventListener('click', function (e) { e.stopPropagation(); });
+})();
+</script>
+
+<script>
+/* ── SNB 사이드바 네비게이션 (캡처 단계 강제 처리) ── */
+(function () {
+  function bindSnb() {
+    var links = document.querySelectorAll('#snb a[href]');
+    [].forEach.call(links, function (a) {
+      a.style.cursor       = 'pointer';
+      a.style.pointerEvents = 'auto';
+      a.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        window.location.href = this.getAttribute('href');
+      }, true); /* capture=true: 다른 핸들러보다 먼저 실행 */
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bindSnb);
+  } else {
+    bindSnb();
+  }
 })();
 </script>
 

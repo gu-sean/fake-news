@@ -40,11 +40,6 @@ def step_vectorize():
     run([sys.executable, 'src/vectorize.py'], 'TF-IDF 벡터화')
 
 
-def step_train(lang: str):
-    run(
-        [sys.executable, 'src/logistic.py', '--lang', lang],
-        f'로지스틱 회귀 학습 ({lang})',
-    )
 
 
 def step_server(port: int):

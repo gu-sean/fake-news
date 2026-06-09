@@ -14,8 +14,16 @@ scipy==1.17.1
 
 # ── 머신러닝 ─────────────────────────────────────────────
 scikit-learn==1.8.0
+xgboost==3.2.0
 joblib==1.5.3
+optuna==4.9.0
 
 # ── 한국어 형태소 분석 ────────────────────────────────────
 konlpy==0.6.0
-pandarallel==1.6.5
+
+# ── 시각화 (visualization/ 스크립트 전용) ─────────────────
+matplotlib==3.10.6
+seaborn==0.13.2
+wordcloud==1.9.6
+nltk
+kiwipiepy

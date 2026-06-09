@@ -168,15 +168,19 @@
     rightPanel.style.width = (100 - pct) + '%';
   });
 
-  document.addEventListener('mouseup', function () {
+  function stopDrag() {
     if (!dragging) return;
     dragging = false;
     divider.classList.remove('dragging');
     document.body.style.cursor      = '';
     document.body.style.userSelect  = '';
-    naverIframe.style.pointerEvents = '';
-    cloneIframe.style.pointerEvents = '';
-  });
+    naverIframe.style.pointerEvents = 'auto';
+    cloneIframe.style.pointerEvents = 'auto';
+  }
+
+  document.addEventListener('mouseup', stopDrag);
+  /* 브라우저 창 밖에서 마우스를 놓았을 때도 복원 */
+  window.addEventListener('blur', stopDrag);
 })();
 </script>
 

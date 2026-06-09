@@ -29,6 +29,8 @@
     div#snb .nav { list-style: none; margin: 0 0 15px; padding: 0; }
     div#snb .nav li a { display: block; font-size: 12px; color: #555; padding: 4px 0; }
     div#snb .nav li a:hover { color: #03c75a; text-decoration: none; }
+    div#snb h2 a.snb_active,
+    div#snb .nav li a.snb_active { color: #03c75a !important; font-weight: bold; }
 
     /* ── type02 기사 목록 ────────────────────────────── */
     ul.type02 { list-style: none; margin: 0 0 16px; padding: 0; }
@@ -86,6 +88,31 @@
         display: inline-block; padding: 0 8px;
         font-size: 12px; color: #bbb; cursor: default; vertical-align: middle; line-height: 40px;
     }
+
+    /* ── SNB 유틸리티 바 ─────────────────────────────── */
+    .snb_util_bar {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 20px 0 9px; border-bottom: 1px solid #e5e5e5;
+        margin-bottom: 0; font-size: 11px; }
+    .snb_util_date { color: #333; white-space: nowrap; font-weight: bold; }
+
+    /* ── 섹션 헤더 (메인/세부 공통 스타일) ──────────────── */
+    .newsflash_header,
+    .newsflash_header2 { padding-bottom: 8px; border-bottom: 2px solid #000; margin-bottom: 8px; }
+    .newsflash_header h3,
+    .newsflash_header2 h3 { font-size: 16px; font-weight: bold; margin: 0; }
+
+    /* ── 세부 카테고리 탭 ────────────────────────────── */
+    .topbox_type1 { margin-bottom: 0; }
+    .topbox_type1 ul.massmedia {
+        list-style: none; margin: 0; padding: 0;
+        display: flex; flex-wrap: wrap; border-bottom: 1px solid #e5e5e5; }
+    .topbox_type1 ul.massmedia li { display: inline-block; }
+    .topbox_type1 ul.massmedia li a {
+        display: inline-block; padding: 6px 10px;
+        font-size: 12px; color: #555; }
+    .topbox_type1 ul.massmedia li a:hover { color: #03c75a; text-decoration: none; }
+    .topbox_type1 ul.massmedia li.on a { color: #03c75a; font-weight: bold; }
   </style>
 </head>
 <body>
@@ -155,16 +182,16 @@
   <tbody><tr>
     <td class="snb">
       <div id="snb" class="snb">
-        <h2 class="h"><a href="https://news.naver.com" target="_blank">속보</a></h2>
+        <h2 class="h"><a href="/proxy/naver"{% if not section_id %} class="snb_active"{% endif %}>속보</a></h2>
         <ul class="nav">
-          <li><a href="https://news.naver.com/main/list.naver?mode=LSD&mid=sec&sid1=100" target="_blank">정치</a></li>
-          <li><a href="https://news.naver.com/main/list.naver?mode=LSD&mid=sec&sid1=101" target="_blank">경제</a></li>
-          <li><a href="https://news.naver.com/main/list.naver?mode=LSD&mid=sec&sid1=102" target="_blank">사회</a></li>
-          <li><a href="https://news.naver.com/main/list.naver?mode=LSD&mid=sec&sid1=103" target="_blank">생활/문화</a></li>
-          <li><a href="https://news.naver.com/main/list.naver?mode=LSD&mid=sec&sid1=104" target="_blank">세계</a></li>
-          <li><a href="https://news.naver.com/main/list.naver?mode=LSD&mid=sec&sid1=105" target="_blank">IT/과학</a></li>
-          <li><a href="https://news.naver.com/main/list.naver?mode=LSD&mid=sec&sid1=110" target="_blank">오피니언</a></li>
-          <li><a href="https://news.naver.com/main/list.naver?mode=LPOD&mid=sec&oid=001" target="_blank">연합뉴스 속보</a></li>
+          <li><a href="/lview/section/100"{% if section_id == '100' %} class="snb_active"{% endif %}>정치</a></li>
+          <li><a href="/lview/section/101"{% if section_id == '101' %} class="snb_active"{% endif %}>경제</a></li>
+          <li><a href="/lview/section/102"{% if section_id == '102' %} class="snb_active"{% endif %}>사회</a></li>
+          <li><a href="/lview/section/103"{% if section_id == '103' %} class="snb_active"{% endif %}>생활/문화</a></li>
+          <li><a href="/lview/section/104"{% if section_id == '104' %} class="snb_active"{% endif %}>세계</a></li>
+          <li><a href="/lview/section/105"{% if section_id == '105' %} class="snb_active"{% endif %}>IT/과학</a></li>
+          <li><a href="/lview/section/110"{% if section_id == '110' %} class="snb_active"{% endif %}>오피니언</a></li>
+          <li><a href="/lview/section/yonhap"{% if section_id == 'yonhap' %} class="snb_active"{% endif %}>연합뉴스 속보</a></li>
         </ul>
       </div>
     </td>
@@ -180,63 +207,44 @@
         <script>setTimeout(() => location.reload(), 3000);</script>
         {% else %}
 
+        {% if section_id %}
+        {# ── 카테고리 섹션 헤더 ── #}
+        <div class="newsflash_header2">
+          <h3>{{ section_name }} 속보</h3>
+        </div>
+        {% if sub_categories is defined and sub_categories %}
+        <div class="topbox_type1">
+          <ul class="massmedia">
+          {% for sub in sub_categories %}
+            <li{% if (active_sid2 is not defined or active_sid2 is none) and sub.sid2 is none %} class="on"{% elif active_sid2 is defined and active_sid2 == sub.sid2 %} class="on"{% endif %}>
+              {% if sub.sid2 %}
+              <a href="/lview/section/{{ section_id }}?sid2={{ sub.sid2 }}">{{ sub.name }}</a>
+              {% else %}
+              <a href="/lview/section/{{ section_id }}">{{ sub.name }}</a>
+              {% endif %}
+            </li>
+          {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+        {% else %}
+        {# ── 속보 메인 헤더 ── #}
         <div class="list_header newsflash_header">
           <h3>전체</h3>
-          <div class="view_type">
-            <span class="tit_on">제목형</span>
-          </div>
+          <div class="view_type"><span class="tit_on">제목형</span></div>
         </div>
+        {% endif %}
 
         <div class="list_body newsflash_body">
-          {# 앞 10개: headline 스타일 #}
-          <ul class="type06_headline">
-          {% for article in news_list[:10] %}
+          <ul class="type02">
+          {% for article in news_list %}
           <li>
-            {% if article.image_url %}
-            <a href="{{ article.url }}" target="_blank" class="thumb_area">
-              <img src="{{ article.image_url }}" alt="{{ article.title }}"
-                   onerror="this.src='https://ssl.pstatic.net/static.news/image/news/2009/noimage_106x72.png';">
-            </a>
-            {% endif %}
-            <div class="text_area">
-              <a href="{{ article.url }}" target="_blank" class="art_tit_h">{{ article.title }}</a>
-              {% if article.summary %}
-              <span class="lede">{{ article.summary }}</span>
-              {% endif %}
-              <span class="type06_meta">
-                <span class="writing">{{ article.press }}</span>
-                <span class="date is_new">{{ article.time }}</span>
-              </span>
-            </div>
+            <a href="{{ article.url }}" target="_blank">{{ article.title }}</a>
+            <span class="writing">{{ article.press }}</span>
+            <span class="date is_new">{{ article.time }}</span>
           </li>
           {% endfor %}
           </ul>
-
-          {# 나머지: 일반 스타일 #}
-          {% if news_list[10:] %}
-          <ul class="type06">
-          {% for article in news_list[10:] %}
-          <li>
-            {% if article.image_url %}
-            <a href="{{ article.url }}" target="_blank" class="thumb_area">
-              <img src="{{ article.image_url }}" alt="{{ article.title }}"
-                   onerror="this.src='https://ssl.pstatic.net/static.news/image/news/2009/noimage_106x72.png';">
-            </a>
-            {% endif %}
-            <div class="text_area">
-              <a href="{{ article.url }}" target="_blank" class="art_tit_n">{{ article.title }}</a>
-              {% if article.summary %}
-              <span class="lede">{{ article.summary }}</span>
-              {% endif %}
-              <span class="type06_meta">
-                <span class="writing">{{ article.press }}</span>
-                <span class="date is_new">{{ article.time }}</span>
-              </span>
-            </div>
-          </li>
-          {% endfor %}
-          </ul>
-          {% endif %}
         </div>
 
         <div class="pagenavi_day">
