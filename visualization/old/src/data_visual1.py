@@ -6,7 +6,7 @@ import pandas as pd
 import seaborn as sns
 
 
-LABEL_COL = "predicted_label"
+LABEL_COL = "label"
 
 # Fake-news problem columns. Each column is expected to contain 0 or 1.
 # 가짜 뉴스 문제 유형 컬럼. 이 컬럼은 0 또는 1의 값을 가집니다.

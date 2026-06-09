@@ -1,0 +1,38 @@
+nbsvm V1 quick LinearSVC tuning log
+================================================================================
+Loaded TF-IDF: shape=(318235, 50000), nnz=54,572,229
+Rows: train=254,588, validation=31,823, test=31,824
+C candidates: [0.075, 0.1, 0.125, 0.15, 0.2]
+
+[Run 1/5] LinearSVC C=0.075
+  Validation: Macro-F1=0.708498 | Accuracy=0.708984 | ROC-AUC=0.778386 | threshold=-0.0400
+  Fit time=19.2s | iterations=5 | convergence warnings=0
+  New best model saved.
+
+[Run 2/5] LinearSVC C=0.1
+  Validation: Macro-F1=0.708818 | Accuracy=0.709267 | ROC-AUC=0.778059 | threshold=-0.0400
+  Fit time=19.3s | iterations=5 | convergence warnings=0
+  New best model saved.
+
+[Run 3/5] LinearSVC C=0.125
+  Validation: Macro-F1=0.709178 | Accuracy=0.709613 | ROC-AUC=0.777317 | threshold=-0.0400
+  Fit time=20.5s | iterations=5 | convergence warnings=0
+  New best model saved.
+
+[Run 4/5] LinearSVC C=0.15
+  Validation: Macro-F1=0.708311 | Accuracy=0.708733 | ROC-AUC=0.776404 | threshold=-0.0400
+  Fit time=21.9s | iterations=5 | convergence warnings=0
+
+[Run 5/5] LinearSVC C=0.2
+  Validation: Macro-F1=0.705526 | Accuracy=0.706344 | ROC-AUC=0.774433 | threshold=-0.0600
+  Fit time=22.6s | iterations=5 | convergence warnings=0
+
+================================================================================
+Best C: 0.125
+Best validation Macro-F1: 0.709178
+Final test Macro-F1: 0.706208
+Final test Accuracy: 0.706637
+Final test ROC-AUC: 0.777646
+Saved model: C:\Users\ChoSB\OneDrive\Desktop\Debelop\Fake_News\ensemble_V1\best_model_nbsvm_V1.pkl
+Saved artifact: C:\Users\ChoSB\OneDrive\Desktop\Debelop\Fake_News\ensemble_V1\best_artifact_nbsvm_V1.pkl
+Elapsed: 1.8 minutes
