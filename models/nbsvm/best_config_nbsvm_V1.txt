@@ -1,0 +1,17 @@
+Best model configuration - nbsvm V1 pre-vectorized LinearSVC
+====================================================================
+C: 0.125
+Threshold selected on validation: -0.0400
+Final test Macro F1: 0.706208
+Final test Accuracy: 0.706637
+Final test Macro precision: 0.706414
+Final test Macro recall: 0.706122
+Final test ROC-AUC: 0.777646
+Confusion Matrix [tn, fp, fn, tp]: [10636, 4815, 4521, 11852]
+
+Problem type performance
+- stat_distortion: samples=7497, accuracy=0.609577, macro_f1=0.576060, fake_recall=0.649864
+- causal_error: samples=9757, accuracy=0.640566, macro_f1=0.597486, fake_recall=0.702844
+- emotional_provocation: samples=2200, accuracy=0.674545, macro_f1=0.590218, fake_recall=0.835128
+- source_lack: samples=10568, accuracy=0.730223, macro_f1=0.647858, fake_recall=0.864770
+- img_mismatch: samples=461, accuracy=0.646421, macro_f1=0.590771, fake_recall=0.700599

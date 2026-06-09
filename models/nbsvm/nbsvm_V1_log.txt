@@ -1,0 +1,74 @@
+nbsvm V1 quick LinearSVC tuning log
+================================================================================
+Loaded TF-IDF: shape=(318235, 50000), nnz=54,572,229
+Rows: train=254,588, validation=31,823, test=31,824
+C candidates: [0.075, 0.1, 0.125, 0.15, 0.2]
+
+[Run 1/5] LinearSVC C=0.075
+  Validation: Macro-F1=0.708498 | Accuracy=0.708984 | ROC-AUC=0.778386 | threshold=-0.0400
+  Fit time=16.6s | iterations=5 | convergence warnings=0
+  DVL validation performance:
+    - stat_distortion: samples=7590 | Accuracy=0.617523 | Macro-F1=0.579476 | Fake recall=0.667113
+    - causal_error: samples=9729 | Accuracy=0.640765 | Macro-F1=0.594061 | Fake recall=0.709903
+    - emotional_provocation: samples=2258 | Accuracy=0.635075 | Macro-F1=0.554148 | Fake recall=0.789717
+    - source_lack: samples=10497 | Accuracy=0.731352 | Macro-F1=0.649570 | Fake recall=0.871956
+    - img_mismatch: samples=453 | Accuracy=0.653422 | Macro-F1=0.599663 | Fake recall=0.717391
+  New best model saved.
+
+[Run 2/5] LinearSVC C=0.1
+  Validation: Macro-F1=0.708818 | Accuracy=0.709267 | ROC-AUC=0.778059 | threshold=-0.0400
+  Fit time=17.8s | iterations=5 | convergence warnings=0
+  DVL validation performance:
+    - stat_distortion: samples=7590 | Accuracy=0.619236 | Macro-F1=0.581687 | Fake recall=0.667496
+    - causal_error: samples=9729 | Accuracy=0.641587 | Macro-F1=0.596255 | Fake recall=0.707520
+    - emotional_provocation: samples=2258 | Accuracy=0.635075 | Macro-F1=0.554148 | Fake recall=0.789717
+    - source_lack: samples=10497 | Accuracy=0.730875 | Macro-F1=0.650412 | Fake recall=0.869220
+    - img_mismatch: samples=453 | Accuracy=0.668874 | Macro-F1=0.616794 | Fake recall=0.729814
+  New best model saved.
+
+[Run 3/5] LinearSVC C=0.125
+  Validation: Macro-F1=0.709178 | Accuracy=0.709613 | ROC-AUC=0.777317 | threshold=-0.0400
+  Fit time=18.5s | iterations=5 | convergence warnings=0
+  DVL validation performance:
+    - stat_distortion: samples=7590 | Accuracy=0.622134 | Macro-F1=0.584871 | Fake recall=0.669602
+    - causal_error: samples=9729 | Accuracy=0.642409 | Macro-F1=0.597679 | Fake recall=0.706925
+    - emotional_provocation: samples=2258 | Accuracy=0.634632 | Macro-F1=0.552988 | Fake recall=0.790376
+    - source_lack: samples=10497 | Accuracy=0.730399 | Macro-F1=0.651320 | Fake recall=0.866347
+    - img_mismatch: samples=453 | Accuracy=0.671082 | Macro-F1=0.620063 | Fake recall=0.729814
+  New best model saved.
+
+[Run 4/5] LinearSVC C=0.15
+  Validation: Macro-F1=0.708311 | Accuracy=0.708733 | ROC-AUC=0.776404 | threshold=-0.0400
+  Fit time=18.7s | iterations=5 | convergence warnings=0
+  DVL validation performance:
+    - stat_distortion: samples=7590 | Accuracy=0.621739 | Macro-F1=0.584760 | Fake recall=0.668453
+    - causal_error: samples=9729 | Accuracy=0.642512 | Macro-F1=0.598627 | Fake recall=0.704989
+    - emotional_provocation: samples=2258 | Accuracy=0.634632 | Macro-F1=0.553813 | Fake recall=0.789057
+    - source_lack: samples=10497 | Accuracy=0.729637 | Macro-F1=0.651070 | Fake recall=0.864569
+    - img_mismatch: samples=453 | Accuracy=0.675497 | Macro-F1=0.622305 | Fake recall=0.739130
+
+[Run 5/5] LinearSVC C=0.2
+  Validation: Macro-F1=0.705526 | Accuracy=0.706344 | ROC-AUC=0.774433 | threshold=-0.0600
+  Fit time=20.7s | iterations=5 | convergence warnings=0
+  DVL validation performance:
+    - stat_distortion: samples=7590 | Accuracy=0.625692 | Macro-F1=0.585442 | Fake recall=0.680896
+    - causal_error: samples=9729 | Accuracy=0.645698 | Macro-F1=0.597587 | Fake recall=0.718243
+    - emotional_provocation: samples=2258 | Accuracy=0.641718 | Macro-F1=0.555814 | Fake recall=0.804878
+    - source_lack: samples=10497 | Accuracy=0.728589 | Macro-F1=0.645923 | Fake recall=0.870041
+    - img_mismatch: samples=453 | Accuracy=0.677704 | Macro-F1=0.619634 | Fake recall=0.751553
+
+================================================================================
+Best C: 0.125
+Best validation Macro-F1: 0.709178
+Final test Macro-F1: 0.706208
+Final test Accuracy: 0.706637
+Final test ROC-AUC: 0.777646
+Final test DVL performance:
+  - stat_distortion: samples=7497 | Accuracy=0.609577 | Macro-F1=0.576060 | Fake recall=0.649864
+  - causal_error: samples=9757 | Accuracy=0.640566 | Macro-F1=0.597486 | Fake recall=0.702844
+  - emotional_provocation: samples=2200 | Accuracy=0.674545 | Macro-F1=0.590218 | Fake recall=0.835128
+  - source_lack: samples=10568 | Accuracy=0.730223 | Macro-F1=0.647858 | Fake recall=0.864770
+  - img_mismatch: samples=461 | Accuracy=0.646421 | Macro-F1=0.590771 | Fake recall=0.700599
+Saved model: C:\Users\ChoSB\OneDrive\Desktop\Debelop\Fake_News\ensemble_V1\pkl\best_model_nbsvm_V1.pkl
+Saved artifact: C:\Users\ChoSB\OneDrive\Desktop\Debelop\Fake_News\ensemble_V1\pkl\best_artifact_nbsvm_V1.pkl
+Elapsed: 1.6 minutes
