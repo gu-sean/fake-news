@@ -14,7 +14,7 @@ BEST_DIR = SOURCE_DIR / "best_txt"
 OUTPUT_PATH = SOURCE_DIR.parent / "img" / "model_performance_comparison.png"
 
 MODEL_FILES = {
-    "Linear SVM (NBSVM)": (
+    "Linear SVM": (
         BEST_DIR / "nbsvm_V1_log.txt",
         "Final test Accuracy",
         "Final test Macro-F1",
@@ -54,6 +54,16 @@ def plot_comparison(
 
     y = np.arange(len(models))
     bar_height = 0.34
+
+    plt.rcParams.update({
+        "font.size": 16,
+        "axes.titlesize": 20,
+        "axes.labelsize": 17,
+        "xtick.labelsize": 15,
+        "ytick.labelsize": 16,
+        "legend.fontsize": 15,
+    })
+
     fig, ax = plt.subplots(figsize=(11, 6.5))
 
     accuracy_bars = ax.barh(
@@ -72,7 +82,7 @@ def plot_comparison(
     )
 
     ax.set_yticks(y, models)
-    ax.set_xlim(0.55, 0.80)
+    ax.set_xlim(0.55, 0.81)
     ax.set_xlabel("Score")
     ax.set_title("Model Performance Comparison", fontsize=16, fontweight="bold", pad=16)
     ax.legend(loc="lower right", frameon=True)
@@ -80,10 +90,10 @@ def plot_comparison(
     ax.yaxis.grid(False)
     ax.spines[["top", "right", "left"]].set_visible(False)
 
-    ax.bar_label(accuracy_bars, fmt="%.4f", padding=5, fontsize=10)
-    ax.bar_label(f1_bars, fmt="%.4f", padding=5, fontsize=10)
+    ax.bar_label(accuracy_bars, fmt="%.4f", padding=6, fontsize=13)
+    ax.bar_label(f1_bars, fmt="%.4f", padding=6, fontsize=13)
 
-    fig.tight_layout()
+    fig.tight_layout(pad=1.2)
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(OUTPUT_PATH, dpi=300, bbox_inches="tight", facecolor="white")
     plt.close(fig)
